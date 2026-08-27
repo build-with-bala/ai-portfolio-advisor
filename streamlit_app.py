@@ -27,6 +27,7 @@ from portfolio_advisor.core import (
 )
 from portfolio_advisor.live import LiveMarketService
 from portfolio_advisor.chat import StockChat, build_system_prompt
+from streamlit_float import float_init, float_css_helper
 
 st.set_page_config(
     page_title="Signal Desk | AI Portfolio Advisor",
@@ -646,60 +647,60 @@ def render_method(bundle: dict, snapshot: dict) -> None:
         st.dataframe(missing, use_container_width=True, hide_index=True)
 
 
-def render_chat(snapshot: dict) -> None:
-    st.markdown('<div class="section-label">07 / Ask the analyst</div>', unsafe_allow_html=True)
+def _toggle_chat() -> None:
+    st.session_state.chat_open = not st.session_state.get("chat_open", False)
+
+
+def render_floating_chat(snapshot: dict) -> None:
+    """A floating 'Ask the analyst' chat bubble pinned to the bottom-right corner."""
     chat = StockChat()
-    if not chat.configured:
-        st.info(
-            "The analyst chatbot is not configured. Set **CODEX_API_URL** and **CODEX_API_KEY** "
-            "in the environment (Coolify) to enable it — it is backed by the codex-api `/v1/chat` service."
-        )
-        return
-    universe = int(snapshot["analysis"]["ticker"].nunique())
-    st.caption(
-        f"Ask about any stock, sector, signal, or comparison across all {universe} stocks in the current "
-        "universe. Answers are grounded in the model's latest snapshot — research only, not investment advice."
-    )
+    float_init()
+    st.session_state.setdefault("chat_open", False)
     st.session_state.setdefault("chat_msgs", [])
     st.session_state.setdefault("chat_conv", None)
 
-    picked = None
-    examples = [
-        "Top 5 stocks by score?",
-        "Strong-buy pharma & healthcare names?",
-        "Compare the two highest-score banks.",
-        "Low-volatility stocks that are buys?",
-    ]
-    cols = st.columns(len(examples))
-    for col, example in zip(cols, examples):
-        if col.button(example, key=f"chat_ex_{example}", use_container_width=True):
-            picked = example
-    if st.session_state.chat_msgs and st.button("Clear conversation", key="chat_clear"):
-        st.session_state.chat_msgs = []
-        st.session_state.chat_conv = None
-        st.rerun()
+    if st.session_state.chat_open:
+        panel = st.container()
+        with panel:
+            head, closer = st.columns([0.82, 0.18])
+            head.markdown("**🤖 Ask the analyst**")
+            closer.button("✕", key="chat_close", help="Close", on_click=_toggle_chat)
+            if not chat.configured:
+                st.info("Chatbot not configured — set CODEX_API_KEY in the environment.")
+            else:
+                universe = int(snapshot["analysis"]["ticker"].nunique())
+                if not st.session_state.chat_msgs:
+                    st.caption(f"Grounded in all {universe} stocks. Research only, not advice.")
+                for message in st.session_state.chat_msgs:
+                    with st.chat_message(message["role"]):
+                        st.markdown(message["text"])
+                if prompt := st.chat_input("Ask about any stock…", key="chat_input_fab"):
+                    with st.chat_message("user"):
+                        st.markdown(prompt)
+                    st.session_state.chat_msgs.append({"role": "user", "text": prompt})
+                    with st.chat_message("assistant"):
+                        with st.spinner("Analysing the universe…"):
+                            try:
+                                system = None if st.session_state.chat_conv else build_system_prompt(snapshot)
+                                result = chat.ask(prompt, conversation_id=st.session_state.chat_conv, system=system)
+                                st.session_state.chat_conv = result["conversation_id"]
+                                st.markdown(result["text"])
+                                st.session_state.chat_msgs.append({"role": "assistant", "text": result["text"]})
+                            except Exception as exc:  # noqa: BLE001 - keep the app alive
+                                st.error(f"The analyst is unavailable: {exc}")
+                                st.session_state.chat_msgs.pop()
+        panel.float(float_css_helper(
+            width="24rem", right="1.5rem", bottom="6rem",
+            css=("background:#0e1b25; border:1px solid rgba(121,242,192,0.28); border-radius:16px; "
+                 "padding:0.7rem 0.95rem 0.5rem; box-shadow:0 18px 50px rgba(0,0,0,0.5); "
+                 "max-height:66vh; overflow-y:auto; z-index:9998;"),
+        ))
 
-    for message in st.session_state.chat_msgs:
-        with st.chat_message(message["role"]):
-            st.markdown(message["text"])
-
-    prompt = st.chat_input("Ask about the stock universe…") or picked
-    if not prompt:
-        return
-    st.session_state.chat_msgs.append({"role": "user", "text": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
-    with st.chat_message("assistant"):
-        with st.spinner("Analysing the universe…"):
-            try:
-                system = None if st.session_state.chat_conv else build_system_prompt(snapshot)
-                result = chat.ask(prompt, conversation_id=st.session_state.chat_conv, system=system)
-                st.session_state.chat_conv = result["conversation_id"]
-                st.markdown(result["text"])
-                st.session_state.chat_msgs.append({"role": "assistant", "text": result["text"]})
-            except Exception as exc:  # noqa: BLE001 - surface a clean message, keep the app alive
-                st.error(f"The analyst is unavailable right now: {exc}")
-                st.session_state.chat_msgs.pop()  # drop the unanswered user turn
+    fab = st.container()
+    with fab:
+        st.button("💬" if not st.session_state.chat_open else "🗙",
+                  key="chat_fab", help="Ask the analyst", on_click=_toggle_chat)
+    fab.float(float_css_helper(right="1.5rem", bottom="1.5rem", css="z-index:9999;"))
 
 
 def main() -> None:
@@ -728,14 +729,12 @@ def main() -> None:
     render_header(snapshot)
     render_metrics(snapshot)
     render_insights(snapshot)
-    tab_overview, tab_chat, tab_research, tab_portfolio, tab_validation, tab_live, tab_method = st.tabs([
-        "Overview", "Ask the analyst", "Stock research", "Portfolio lab", "Validation", "India live", "Method & data"
+    tab_overview, tab_research, tab_portfolio, tab_validation, tab_live, tab_method = st.tabs([
+        "Overview", "Stock research", "Portfolio lab", "Validation", "India live", "Method & data"
     ])
     with tab_overview:
         render_recommendations(snapshot)
         render_evidence(snapshot, bundle)
-    with tab_chat:
-        render_chat(snapshot)
     with tab_research:
         render_research(bundle, snapshot)
     with tab_portfolio:
@@ -747,6 +746,7 @@ def main() -> None:
     with tab_method:
         render_method(bundle, snapshot)
     st.caption(f"Artifact date: {snapshot['asof'].date()} · Profile: {profile['risk']} · Educational research tool, not investment advice.")
+    render_floating_chat(snapshot)
 
 
 if __name__ == "__main__":
