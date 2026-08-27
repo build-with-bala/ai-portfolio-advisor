@@ -26,6 +26,8 @@ from portfolio_advisor.core import (
     validation_analysis,
 )
 from portfolio_advisor.live import LiveMarketService
+from portfolio_advisor.chat import StockChat, build_system_prompt
+from streamlit_float import float_init, float_css_helper
 
 st.set_page_config(
     page_title="Signal Desk | AI Portfolio Advisor",
@@ -256,6 +258,34 @@ def render_metrics(snapshot: dict) -> None:
             metric_card(label, value, note)
 
 
+_FEATURE_LABELS = {
+    "MACD_signal": "MACD momentum", "RSI_14": "RSI", "fracdiff_close": "price trend",
+    "OBV_delta": "volume flow", "Stoch_K": "stochastic", "Williams_R": "Williams %R",
+    "ret_5": "5-day momentum", "ret_21": "21-day momentum", "vol_21": "low volatility",
+    "ATR_14": "range", "Boll_BW": "Bollinger width", "f_PE": "valuation (P/E)",
+    "f_PB": "valuation (P/B)", "f_ROE": "return on equity", "f_DE": "balance sheet",
+    "f_NPM": "net margin", "f_DivYld": "dividend yield", "f_RevG": "revenue growth",
+}
+
+
+def _humanize_feature(name: object) -> str:
+    key = str(name)
+    return _FEATURE_LABELS.get(key, key.replace("f_", "").replace("_", " "))
+
+
+def bull_case(row) -> tuple[str, str]:
+    """Return (upside %, one-line bull narrative) from the model's 90th-pct forecast + drivers."""
+    drivers: list[str] = []
+    for column in ("technical_evidence", "fundamental_evidence"):
+        evidence = row.get(column)
+        if isinstance(evidence, (list, tuple)) and len(evidence):
+            drivers.append(_humanize_feature(evidence[0]))
+    if not drivers:
+        drivers = ["momentum"]
+    lead = " and ".join(dict.fromkeys(drivers[:2]))  # de-dup, keep order
+    return fmt_pct(row.get("bull_return_21d")), f"Upside if {lead} keep confirming."
+
+
 def render_insights(snapshot: dict) -> None:
     """Explain what the current profile and evidence imply in plain language."""
 
@@ -286,6 +316,11 @@ def render_insights(snapshot: dict) -> None:
             notes.append("The leading pick is fundamentally strong but technical confirmation is weaker; staged entry is more appropriate than chasing price.")
         else:
             notes.append("The leading pick has mixed pillar scores; keep the position capped and review the evidence ledger before acting.")
+    if not picks.empty:
+        notes.append(
+            f"**Bull case for the book:** a **{fmt_pct(summary.get('bull_return_21d'))}** weighted 90th-percentile 21-day upside "
+            f"versus a {fmt_pct(summary.get('expected_return_21d'))} base case and a {fmt_pct(summary.get('bear_return_21d'))} bear case."
+        )
     risk_note = f"Portfolio fit: {summary['sector_count']} sectors, {fmt_pct(summary.get('cash_weight'))} cash, and {fmt_pct(summary.get('annual_volatility'))} estimated annual volatility."
     notes.append(risk_note)
     left, right = st.columns([1.4, 1])
@@ -351,6 +386,7 @@ def render_recommendations(snapshot: dict) -> None:
             for column, (_, row) in zip(columns, picks.iloc[start:start + 3].iterrows()):
                 decision = row["recommendation"]
                 cls = "signal-buy" if "BUY" in decision else "signal-watch" if "WATCH" in decision else "signal-pass"
+                bull_up, bull_txt = bull_case(row)
                 with column:
                     st.markdown(
                         f'<div class="signal-card"><div class="{cls}">{decision}</div>'
@@ -358,6 +394,7 @@ def render_recommendations(snapshot: dict) -> None:
                         f'<div class="small-copy">{row.get("sector", "Unknown")} · {row.get("industry", "Unknown")}</div>'
                         f'<hr style="border-color:#203442">'
                         f'<div class="small-copy">Base case <b style="color:#79f2c0">{fmt_pct(row.get("exp_ret_21d"))}</b> · confidence {fmt_number(row.get("evidence_confidence"), 2)}</div>'
+                        f'<div class="small-copy">Bull case <b style="color:#9dffdb">{bull_up}</b> (90th-pct) · {bull_txt}</div>'
                         f'<div class="small-copy">Technical {fmt_number(row.get("technical_score"), 0)}/100 · Fundamental {fmt_number(row.get("fundamental_score"), 0)}/100</div>'
                         f'<div class="evidence" style="margin-top:12px">{row.get("decision_reason", "")}</div></div>',
                         unsafe_allow_html=True,
@@ -645,6 +682,62 @@ def render_method(bundle: dict, snapshot: dict) -> None:
         st.dataframe(missing, use_container_width=True, hide_index=True)
 
 
+def _toggle_chat() -> None:
+    st.session_state.chat_open = not st.session_state.get("chat_open", False)
+
+
+def render_floating_chat(snapshot: dict) -> None:
+    """A floating 'Ask the analyst' chat bubble pinned to the bottom-right corner."""
+    chat = StockChat()
+    float_init()
+    st.session_state.setdefault("chat_open", False)
+    st.session_state.setdefault("chat_msgs", [])
+    st.session_state.setdefault("chat_conv", None)
+
+    if st.session_state.chat_open:
+        panel = st.container()
+        with panel:
+            head, closer = st.columns([0.82, 0.18])
+            head.markdown("**🤖 Ask the analyst**")
+            closer.button("✕", key="chat_close", help="Close", on_click=_toggle_chat)
+            if not chat.configured:
+                st.info("Chatbot not configured — set CODEX_API_KEY in the environment.")
+            else:
+                universe = int(snapshot["analysis"]["ticker"].nunique())
+                if not st.session_state.chat_msgs:
+                    st.caption(f"Grounded in all {universe} stocks. Research only, not advice.")
+                for message in st.session_state.chat_msgs:
+                    with st.chat_message(message["role"]):
+                        st.markdown(message["text"])
+                if prompt := st.chat_input("Ask about any stock…", key="chat_input_fab"):
+                    with st.chat_message("user"):
+                        st.markdown(prompt)
+                    st.session_state.chat_msgs.append({"role": "user", "text": prompt})
+                    with st.chat_message("assistant"):
+                        with st.spinner("Analysing the universe…"):
+                            try:
+                                system = None if st.session_state.chat_conv else build_system_prompt(snapshot)
+                                result = chat.ask(prompt, conversation_id=st.session_state.chat_conv, system=system)
+                                st.session_state.chat_conv = result["conversation_id"]
+                                st.markdown(result["text"])
+                                st.session_state.chat_msgs.append({"role": "assistant", "text": result["text"]})
+                            except Exception as exc:  # noqa: BLE001 - keep the app alive
+                                st.error(f"The analyst is unavailable: {exc}")
+                                st.session_state.chat_msgs.pop()
+        panel.float(float_css_helper(
+            width="24rem", right="1.5rem", bottom="6rem",
+            css=("background:#0e1b25; border:1px solid rgba(121,242,192,0.28); border-radius:16px; "
+                 "padding:0.7rem 0.95rem 0.5rem; box-shadow:0 18px 50px rgba(0,0,0,0.5); "
+                 "max-height:66vh; overflow-y:auto; z-index:9998;"),
+        ))
+
+    fab = st.container()
+    with fab:
+        st.button("💬" if not st.session_state.chat_open else "🗙",
+                  key="chat_fab", help="Ask the analyst", on_click=_toggle_chat)
+    fab.float(float_css_helper(right="1.5rem", bottom="1.5rem", css="z-index:9999;"))
+
+
 def main() -> None:
     inject_css()
     artifact_path = os.getenv("ARTIFACTS_PATH", str(Path(__file__).resolve().parent / "data" / "artifacts.pkl"))
@@ -688,6 +781,7 @@ def main() -> None:
     with tab_method:
         render_method(bundle, snapshot)
     st.caption(f"Artifact date: {snapshot['asof'].date()} · Profile: {profile['risk']} · Educational research tool, not investment advice.")
+    render_floating_chat(snapshot)
 
 
 if __name__ == "__main__":

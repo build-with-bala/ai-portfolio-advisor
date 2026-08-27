@@ -5,6 +5,8 @@ services:
       dockerfile: Dockerfile
     environment:
       ARTIFACTS_PATH: /app/data/artifacts.pkl
+      CODEX_API_URL: https://codex-api.ahoum.com
+      # CODEX_API_KEY: set in Coolify secret env (mint via codex-api POST /admin/keys)
     volumes:
       - ./data:/app/data:ro
     ports:
