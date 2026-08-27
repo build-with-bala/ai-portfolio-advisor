@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections import defaultdict, deque
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, time
@@ -45,14 +46,33 @@ class QuoteStore:
     def __init__(self) -> None:
         self._lock = Lock()
         self._quotes: dict[str, Quote] = {}
+        self._history: dict[str, deque[Quote]] = defaultdict(lambda: deque(maxlen=240))
 
     def update(self, quote: Quote) -> None:
         with self._lock:
             self._quotes[quote.ticker] = quote
+            history = self._history[quote.ticker]
+            if not history or quote.timestamp > history[-1].timestamp or quote.price != history[-1].price:
+                history.append(quote)
 
     def snapshot(self) -> dict[str, Quote]:
         with self._lock:
             return dict(self._quotes)
+
+    def history_frame(self) -> pd.DataFrame:
+        with self._lock:
+            rows = [
+                {
+                    "ticker": quote.ticker,
+                    "timestamp": quote.timestamp,
+                    "price": quote.price,
+                    "intraday_return": quote.intraday_return,
+                    "source": quote.source,
+                }
+                for history in self._history.values()
+                for quote in history
+            ]
+        return pd.DataFrame(rows)
 
 
 class BaseFeed:
@@ -262,6 +282,11 @@ class LiveMarketService:
             "error": self.feed.last_error,
             "live_contract": "exchange websocket" if self.provider_name in {"zerodha", "kite", "kiteconnect"} else "not exchange realtime",
         }
+
+    def history_frame(self) -> pd.DataFrame:
+        """Return the in-process quote tape for the live chart."""
+
+        return self.store.history_frame()
 
     def analyze(self, profile: Mapping[str, Any] | None = None, asof: Any | None = None) -> dict[str, Any]:
         self.start()

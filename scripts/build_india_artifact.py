@@ -55,15 +55,25 @@ def notebook_functions(notebook: Path) -> dict[str, object]:
 def main() -> None:
     root = Path(__file__).resolve().parents[1]
     ns = notebook_functions(root / "notebooks" / "Financial_Analysis.ipynb")
+    sector_universe = {
+        "Banks & NBFC": ["HDFCBANK.NS", "ICICIBANK.NS", "SBIN.NS", "AXISBANK.NS", "KOTAKBANK.NS"],
+        "IT Services": ["TCS.NS", "INFY.NS", "HCLTECH.NS", "WIPRO.NS", "TECHM.NS"],
+        "Oil, Gas & Energy": ["RELIANCE.NS", "ONGC.NS", "BPCL.NS", "IOC.NS", "GAIL.NS"],
+        "FMCG": ["ITC.NS", "HINDUNILVR.NS", "NESTLEIND.NS", "BRITANNIA.NS", "DABUR.NS"],
+        "Automobiles": ["MARUTI.NS", "M&M.NS", "BAJAJ-AUTO.NS", "HEROMOTOCO.NS", "EICHERMOT.NS"],
+        "Pharma & Healthcare": ["SUNPHARMA.NS", "CIPLA.NS", "DRREDDY.NS", "DIVISLAB.NS", "APOLLOHOSP.NS"],
+        "Capital Goods & Defence": ["LT.NS", "ABB.NS", "SIEMENS.NS", "BEL.NS", "HAL.NS"],
+        "Metals & Mining": ["TATASTEEL.NS", "HINDALCO.NS", "JSWSTEEL.NS", "COALINDIA.NS", "VEDL.NS"],
+        "Utilities & Power": ["NTPC.NS", "POWERGRID.NS", "TATAPOWER.NS", "JSWENERGY.NS", "TORNTPOWER.NS"],
+        "Consumer Discretionary & Retail": ["TITAN.NS", "TRENT.NS", "DMART.NS", "JUBLFOOD.NS", "ETERNAL.NS"],
+        "Chemicals": ["PIDILITIND.NS", "SRF.NS", "UPL.NS", "PIIND.NS", "DEEPAKNTR.NS"],
+        "Real Estate & Construction": ["DLF.NS", "GODREJPROP.NS", "OBEROIRLTY.NS", "PRESTIGE.NS", "PHOENIXLTD.NS"],
+    }
+    sector_map = {ticker: sector for sector, tickers in sector_universe.items() for ticker in tickers}
+    universe = [ticker for tickers in sector_universe.values() for ticker in tickers]
     cfg = {
-        "UNIVERSE": [
-            "RELIANCE.NS", "HDFCBANK.NS", "ICICIBANK.NS", "INFY.NS", "TCS.NS",
-            "ITC.NS", "LT.NS", "SBIN.NS", "BHARTIARTL.NS", "HINDUNILVR.NS",
-            "BAJFINANCE.NS", "MARUTI.NS", "SUNPHARMA.NS", "AXISBANK.NS",
-            "KOTAKBANK.NS", "TATAMOTORS.NS", "HCLTECH.NS", "NTPC.NS",
-            "POWERGRID.NS", "ADANIPORTS.NS", "ASIANPAINT.NS", "ULTRACEMCO.NS",
-            "WIPRO.NS",
-        ],
+        "UNIVERSE": universe,
+        "SECTOR_UNIVERSE": sector_universe,
         "START": "2017-01-01",
         "END": pd.Timestamp.today().strftime("%Y-%m-%d"),
         "HORIZON": 21,
@@ -106,6 +116,7 @@ def main() -> None:
             print(f"metadata unavailable for {ticker}: {exc}")
             metadata_rows[ticker] = {key: np.nan for key in keys}
     metadata = pd.DataFrame(metadata_rows).T.rename(columns={"marketCap": "market_cap"})
+    metadata["sector"] = [sector_map.get(ticker, metadata.loc[ticker, "sector"]) for ticker in metadata.index]
     for column in metadata.columns:
         if column not in {"sector", "industry", "recommendationKey"}:
             metadata[column] = pd.to_numeric(metadata[column], errors="coerce")

@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from plotly.subplots import make_subplots
 
 from portfolio_advisor.core import (
     build_recommendation_snapshot,
@@ -125,6 +126,50 @@ def chart_layout(fig: go.Figure, height: int = 320) -> go.Figure:
     return fig
 
 
+def indicator_frame(frame: pd.DataFrame | None, lookback: int = 252) -> pd.DataFrame:
+    """Build the visual indicator tape used by the research and live panels."""
+
+    if not isinstance(frame, pd.DataFrame) or "Close" not in frame:
+        return pd.DataFrame()
+    data = frame.copy().tail(lookback)
+    close = pd.to_numeric(data["Close"], errors="coerce")
+    high = pd.to_numeric(data.get("High", close), errors="coerce")
+    low = pd.to_numeric(data.get("Low", close), errors="coerce")
+    volume = pd.to_numeric(data.get("Volume", pd.Series(index=data.index)), errors="coerce")
+    sma20 = close.rolling(20).mean()
+    sma50 = close.rolling(50).mean()
+    mid = sma20
+    sd = close.rolling(20).std()
+    delta = close.diff()
+    gain = delta.clip(lower=0).ewm(alpha=1 / 14, adjust=False).mean()
+    loss = (-delta.clip(upper=0)).ewm(alpha=1 / 14, adjust=False).mean()
+    rsi = 100 - 100 / (1 + gain / loss.replace(0, np.nan))
+    ema12 = close.ewm(span=12, adjust=False).mean()
+    ema26 = close.ewm(span=26, adjust=False).mean()
+    macd = ema12 - ema26
+    true_range = pd.concat([high - low, (high - close.shift()).abs(), (low - close.shift()).abs()], axis=1).max(axis=1)
+    atr = true_range.ewm(alpha=1 / 14, adjust=False).mean() / close
+    result = pd.DataFrame(index=data.index)
+    result["Open"] = pd.to_numeric(data.get("Open", close), errors="coerce")
+    result["High"] = high
+    result["Low"] = low
+    result["Close"] = close
+    result["Volume"] = volume
+    result["SMA20"] = sma20
+    result["SMA50"] = sma50
+    result["BB_upper"] = mid + 2 * sd
+    result["BB_lower"] = mid - 2 * sd
+    result["RSI14"] = rsi
+    result["MACD"] = macd
+    result["MACD_signal"] = macd.ewm(span=9, adjust=False).mean()
+    result["ATR14_pct"] = atr
+    result["Boll_BW"] = (4 * sd / mid).replace([np.inf, -np.inf], np.nan)
+    result["ret_5"] = close.pct_change(5)
+    result["ret_21"] = close.pct_change(21)
+    result["vol_21"] = close.pct_change().rolling(21).std() * np.sqrt(252)
+    return result.dropna(subset=["Close"])
+
+
 @st.cache_resource(show_spinner=False)
 def cached_bundle(path: str) -> dict:
     return load_bundle(path)
@@ -208,6 +253,49 @@ def render_metrics(snapshot: dict) -> None:
     for column, (label, value, note) in zip(cols, values):
         with column:
             metric_card(label, value, note)
+
+
+def render_insights(snapshot: dict) -> None:
+    """Explain what the current profile and evidence imply in plain language."""
+
+    analysis = snapshot["analysis"]
+    picks = snapshot["picks"]
+    summary = snapshot["summary"]
+    st.markdown('<div class="section-label">00 / Automated insights</div>', unsafe_allow_html=True)
+    if analysis.empty:
+        st.info("No analysis rows are available for the selected artifact.")
+        return
+    buy_count = int(analysis["recommendation"].isin(["BUY", "STRONG BUY"]).sum())
+    pass_count = int(analysis["recommendation"].eq("PASS").sum())
+    notes: list[str] = [
+        f"The model currently finds **{buy_count} actionable names** and **{pass_count} passes** across the loaded universe.",
+    ]
+    if picks.empty:
+        notes.append("No stock cleared every profile gate. The correct action for this profile is to stay in cash or relax one constraint deliberately.")
+    else:
+        top = picks.iloc[0]
+        notes.append(
+            f"The highest-ranked fit is **{top['ticker']}** ({top['recommendation']}), with a {fmt_pct(top.get('exp_ret_21d'))} base-case 21-day forecast and {fmt_number(top.get('evidence_confidence'), 2)} evidence confidence."
+        )
+        if top.get("technical_score", 0) >= 60 and top.get("fundamental_score", 0) >= 60:
+            notes.append("Technical momentum and fundamental quality agree on the leading pick; this is the strongest form of confirmation in the current framework.")
+        elif top.get("technical_score", 0) >= 60:
+            notes.append("The leading pick is technically strong but needs fundamental confirmation; treat it as a momentum-led thesis.")
+        elif top.get("fundamental_score", 0) >= 60:
+            notes.append("The leading pick is fundamentally strong but technical confirmation is weaker; staged entry is more appropriate than chasing price.")
+        else:
+            notes.append("The leading pick has mixed pillar scores; keep the position capped and review the evidence ledger before acting.")
+    risk_note = f"Portfolio fit: {summary['sector_count']} sectors, {fmt_pct(summary.get('cash_weight'))} cash, and {fmt_pct(summary.get('annual_volatility'))} estimated annual volatility."
+    notes.append(risk_note)
+    left, right = st.columns([1.4, 1])
+    with left:
+        for note in notes:
+            st.markdown(f'<div class="evidence" style="margin:8px 0">{note}</div>', unsafe_allow_html=True)
+    with right:
+        breadth = pd.DataFrame({"Decision": ["BUY", "PASS", "Other"], "Names": [buy_count, pass_count, max(len(analysis) - buy_count - pass_count, 0)]})
+        fig = go.Figure(go.Bar(x=breadth["Decision"], y=breadth["Names"], marker_color=[PALETTE["mint"], PALETTE["red"], PALETTE["amber"]], text=breadth["Names"], textposition="outside"))
+        fig.update_layout(title="Signal breadth", yaxis_title="Assets")
+        st.plotly_chart(chart_layout(fig, 240), use_container_width=True)
 
 
 def table_for(frame: pd.DataFrame, include_risk: bool = True) -> pd.DataFrame:
@@ -368,18 +456,46 @@ def render_research(bundle: dict, snapshot: dict) -> None:
     ]):
         with column:
             metric_card(label, value)
-    left, right = st.columns([1.35, 1])
+    left, right = st.columns([1.5, 1])
     with left:
-        history = detail["price_history"]
-        if not history.empty:
-            fig = go.Figure(go.Scatter(x=history["date"], y=history["close"], mode="lines", line={"color": PALETTE["mint"], "width": 2}))
-            fig.update_layout(title=f"{selected} price history", yaxis_title="Close")
-            st.plotly_chart(chart_layout(fig, 330), use_container_width=True)
+        indicators = indicator_frame(bundle["prices"].get(selected))
+        if not indicators.empty:
+            dates = indicators.index
+            fig = make_subplots(rows=4, cols=1, shared_xaxes=True, vertical_spacing=0.025, row_heights=[0.48, 0.14, 0.19, 0.19], subplot_titles=(f"{selected} price + trend bands", "Volume", "RSI (14)", "MACD"))
+            fig.add_trace(go.Candlestick(x=dates, open=indicators["Open"], high=indicators["High"], low=indicators["Low"], close=indicators["Close"], name="OHLC"), row=1, col=1)
+            for column, color in [("SMA20", PALETTE["amber"]), ("SMA50", PALETTE["blue"]), ("BB_upper", PALETTE["muted"]), ("BB_lower", PALETTE["muted"])]:
+                fig.add_trace(go.Scatter(x=dates, y=indicators[column], mode="lines", name=column, line={"color": color, "width": 1.2, "dash": "dot" if column.startswith("BB") else "solid"}), row=1, col=1)
+            fig.add_trace(go.Bar(x=dates, y=indicators["Volume"], name="Volume", marker_color=PALETTE["blue"], opacity=0.55), row=2, col=1)
+            fig.add_trace(go.Scatter(x=dates, y=indicators["RSI14"], mode="lines", name="RSI14", line={"color": PALETTE["mint"]}), row=3, col=1)
+            fig.add_hline(y=70, line_dash="dot", line_color=PALETTE["red"], row=3, col=1)
+            fig.add_hline(y=30, line_dash="dot", line_color=PALETTE["blue"], row=3, col=1)
+            fig.add_trace(go.Scatter(x=dates, y=indicators["MACD"], mode="lines", name="MACD", line={"color": PALETTE["amber"]}), row=4, col=1)
+            fig.add_trace(go.Scatter(x=dates, y=indicators["MACD_signal"], mode="lines", name="Signal", line={"color": PALETTE["blue"]}), row=4, col=1)
+            fig.update_layout(height=760, xaxis_rangeslider_visible=False, showlegend=True)
+            fig.update_yaxes(gridcolor=PALETTE["line"])
+            st.plotly_chart(chart_layout(fig, 760), use_container_width=True)
+            latest = indicators.iloc[-1]
+            rsi_value = float(latest["RSI14"]) if pd.notna(latest["RSI14"]) else None
+            trend = "above both SMA20 and SMA50" if latest["Close"] > latest["SMA20"] and latest["Close"] > latest["SMA50"] else "below both SMA20 and SMA50" if latest["Close"] < latest["SMA20"] and latest["Close"] < latest["SMA50"] else "between the short- and medium-term averages"
+            momentum = "overbought" if rsi_value is not None and rsi_value >= 70 else "oversold" if rsi_value is not None and rsi_value <= 30 else "in a neutral RSI zone"
+            macd_state = "positive MACD crossover" if latest["MACD"] > latest["MACD_signal"] else "negative MACD crossover"
+            st.markdown(f"**Technical insight:** Price is {trend}; RSI is {momentum} ({fmt_number(rsi_value, 1)}), with a {macd_state}. The 21-day realized volatility is {fmt_pct(latest['vol_21'])}.")
     with right:
         score_frame = pd.DataFrame({"Pillar": ["Technical", "Fundamental", "Model", "Portfolio fit"], "Score": [row.get("technical_score"), row.get("fundamental_score"), row.get("model_score"), row.get("portfolio_fit_score")]})
         fig = go.Figure(go.Bar(x=score_frame["Pillar"], y=score_frame["Score"], marker_color=[PALETTE["mint"], PALETTE["blue"], PALETTE["amber"], PALETTE["red"]], text=score_frame["Score"].round(0), textposition="outside"))
         fig.update_layout(title="Evidence pillars", yaxis={"range": [0, 105]})
         st.plotly_chart(chart_layout(fig, 330), use_container_width=True)
+    if not indicators.empty:
+        st.markdown("#### Indicator readings")
+        latest = indicators.iloc[-1]
+        indicator_rows = pd.DataFrame([
+            {"Indicator": "RSI (14)", "Value": fmt_number(latest["RSI14"], 1), "Interpretation": "Overbought" if latest["RSI14"] >= 70 else "Oversold" if latest["RSI14"] <= 30 else "Neutral"},
+            {"Indicator": "MACD", "Value": fmt_number(latest["MACD"], 3), "Interpretation": "Above signal" if latest["MACD"] > latest["MACD_signal"] else "Below signal"},
+            {"Indicator": "Bollinger bandwidth", "Value": fmt_pct(latest["Boll_BW"]), "Interpretation": "Expansion / higher movement" if latest["Boll_BW"] > indicators["Boll_BW"].median() else "Compression / quieter movement"},
+            {"Indicator": "ATR (14)", "Value": fmt_pct(latest["ATR14_pct"]), "Interpretation": "Daily trading range"},
+            {"Indicator": "Return (5d / 21d)", "Value": f"{fmt_pct(latest['ret_5'])} / {fmt_pct(latest['ret_21'])}", "Interpretation": "Recent price momentum"},
+        ])
+        st.dataframe(indicator_rows, use_container_width=True, hide_index=True)
     st.markdown("#### Fundamental snapshot")
     fundamentals = detail["fundamentals"]
     st.dataframe(pd.DataFrame([fundamentals]).T.rename(columns={0: "Observed value"}), use_container_width=True)
@@ -448,6 +564,14 @@ def render_live(bundle: dict, artifact_path: str, profile: dict) -> None:
         st.info("Waiting for the first quote. Keep the process running during the NSE cash session.")
         return
     live_snapshot = service.analyze(profile)
+    history = service.history_frame()
+    if not history.empty:
+        st.markdown("#### Live price tape")
+        live_chart = go.Figure()
+        for ticker, group in history.groupby("ticker"):
+            live_chart.add_trace(go.Scatter(x=group["timestamp"], y=group["price"], mode="lines+markers", name=ticker))
+        live_chart.update_layout(title="Provider quote history in this session", yaxis_title="Price", xaxis_title="IST timestamp")
+        st.plotly_chart(chart_layout(live_chart, 380), use_container_width=True)
     live = live_snapshot["analysis"].copy()
     live = live.sort_values(["live_overall_score", "overall_score"], ascending=False).head(20)
     columns = [
@@ -469,6 +593,9 @@ def render_live(bundle: dict, artifact_path: str, profile: dict) -> None:
     if "Live price" in show:
         show["Live price"] = show["Live price"].map(lambda value: fmt_number(value, 2))
     st.dataframe(show, use_container_width=True, hide_index=True)
+    st.markdown("#### Live insight")
+    top_live = live.iloc[0]
+    st.markdown(f"**{top_live['ticker']}** leads the live ranking at {fmt_number(top_live.get('live_price'), 2)} with a live score of {fmt_number(top_live.get('live_overall_score'), 0)}/100. The live overlay is only a technical confirmation; the daily model forecast remains the primary research signal.")
     st.caption("The daily ML forecast is kept separate from the live technical confirmation overlay; a tick does not silently retrain the model.")
 
 
@@ -528,6 +655,7 @@ def main() -> None:
         return
     render_header(snapshot)
     render_metrics(snapshot)
+    render_insights(snapshot)
     tab_overview, tab_research, tab_portfolio, tab_validation, tab_live, tab_method = st.tabs([
         "Overview", "Stock research", "Portfolio lab", "Validation", "India live", "Method & data"
     ])
