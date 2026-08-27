@@ -183,6 +183,23 @@ def cached_live_service(path: str) -> LiveMarketService:
     return LiveMarketService(load_bundle(path))
 
 
+def _profile_cache_key(profile: dict) -> tuple:
+    """A hashable key for the profile so identical profiles hit the snapshot cache."""
+    return tuple(sorted((k, tuple(v) if isinstance(v, (list, tuple)) else v) for k, v in profile.items()))
+
+
+@st.cache_data(show_spinner="Analysing the 500-stock universe…", ttl=3600, max_entries=16)
+def cached_snapshot(profile_key: tuple, _profile: dict, _artifact_path: str) -> dict:
+    """Cache the (expensive, ~8s over 500 stocks) recommendation snapshot per profile.
+
+    Keyed only by `profile_key`; `_profile`/`_artifact_path` are underscore-prefixed
+    so Streamlit excludes them from the hash. Same profile -> instant on tab switches,
+    chat interactions, and reruns; a changed profile recomputes once.
+    """
+    bundle = cached_bundle(_artifact_path)
+    return build_recommendation_snapshot(bundle, _profile)
+
+
 def sidebar_profile(bundle: dict) -> dict:
     metadata = bundle.get("metadata")
     sectors = []
@@ -757,7 +774,7 @@ def main() -> None:
         return
     profile = sidebar_profile(bundle)
     try:
-        snapshot = build_recommendation_snapshot(bundle, profile)
+        snapshot = cached_snapshot(_profile_cache_key(profile), profile, artifact_path)
     except (AttributeError, KeyError, OSError, TypeError, ValueError) as exc:
         st.error(f"Analysis could not be computed: {exc}")
         return
