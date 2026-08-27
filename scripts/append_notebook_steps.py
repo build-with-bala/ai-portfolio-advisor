@@ -121,6 +121,40 @@ META_KEYS = [
 ]
 
 
+def portable_index(index):
+    if isinstance(index, pd.MultiIndex):
+        arrays = []
+        for level in range(index.nlevels):
+            values = index.get_level_values(level)
+            arrays.append(values.astype("object") if pd.api.types.is_string_dtype(values.dtype) else values)
+        return pd.MultiIndex.from_arrays(arrays, names=index.names)
+    return index.astype("object") if pd.api.types.is_string_dtype(index.dtype) else index
+
+
+def make_pickle_portable(value):
+    if isinstance(value, pd.DataFrame):
+        frame = value.copy()
+        frame.index = portable_index(frame.index)
+        frame.columns = portable_index(frame.columns)
+        for column in frame.columns:
+            if pd.api.types.is_string_dtype(frame[column].dtype):
+                frame[column] = frame[column].astype("object")
+        return frame
+    if isinstance(value, pd.Series):
+        series = value.copy()
+        series.index = portable_index(series.index)
+        if pd.api.types.is_string_dtype(series.dtype):
+            series = series.astype("object")
+        return series
+    if isinstance(value, dict):
+        return {key: make_pickle_portable(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [make_pickle_portable(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(make_pickle_portable(item) for item in value)
+    return value
+
+
 def enriched_metadata(tickers):
     rows = {}
     for ticker in tickers:
@@ -149,7 +183,7 @@ for col in [
         funda_export["f_" + col] = metadata[col]
 funda_export["f_market_cap"] = metadata.get("market_cap", np.nan)
 
-bundle = dict(
+bundle = make_pickle_portable(dict(
     res=india_res,
     prices=india_prices,
     models=india_models,
@@ -160,7 +194,7 @@ bundle = dict(
     metadata=metadata,
     exporter_version="2026-08-27-india-production-v1",
     market="NSE India",
-)
+))
 with open(ARTIFACT_DIR / "artifacts.pkl", "wb") as handle:
     pickle.dump(bundle, handle, protocol=pickle.HIGHEST_PROTOCOL)
 metadata.to_csv(ARTIFACT_DIR / "metadata.csv")

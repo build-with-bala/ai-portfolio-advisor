@@ -18,6 +18,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_string_dtype
 from scipy.cluster.hierarchy import linkage
 from scipy.spatial.distance import squareform
 from scipy.stats import spearmanr
@@ -116,8 +117,15 @@ def load_bundle(path: str | os.PathLike[str] | None = None) -> dict[str, Any]:
         raise FileNotFoundError(
             f"No portfolio artifact found at {artifact_path}. Run the notebook export step first."
         )
-    with artifact_path.open("rb") as handle:
-        bundle = pickle.load(handle)
+    try:
+        with artifact_path.open("rb") as handle:
+            bundle = pickle.load(handle)
+    except NotImplementedError as exc:
+        raise ValueError(
+            "The artifact was created with a pandas string dtype that this runtime "
+            "cannot restore. Re-run the notebook exporter from the latest repo, or "
+            "rebuild the artifact with scripts/build_india_artifact.py."
+        ) from exc
     if not isinstance(bundle, dict):
         raise TypeError("The artifact must be a dictionary created by the notebook exporter.")
     required = {"res", "prices", "models", "panel_test", "features"}
@@ -125,6 +133,46 @@ def load_bundle(path: str | os.PathLike[str] | None = None) -> dict[str, Any]:
     if missing:
         raise ValueError(f"Artifact is missing required keys: {', '.join(missing)}")
     return bundle
+
+
+def make_pickle_portable(value: Any) -> Any:
+    """Convert pandas string extension arrays to object strings before pickling.
+
+    Colab and Docker can install different pandas point releases. Plain object
+    string columns are slower, but they unpickle reliably across those runtimes.
+    """
+
+    if isinstance(value, pd.DataFrame):
+        frame = value.copy()
+        frame.index = _portable_index(frame.index)
+        frame.columns = _portable_index(frame.columns)
+        for column in frame.columns:
+            if is_string_dtype(frame[column].dtype):
+                frame[column] = frame[column].astype("object")
+        return frame
+    if isinstance(value, pd.Series):
+        series = value.copy()
+        series.index = _portable_index(series.index)
+        if is_string_dtype(series.dtype):
+            series = series.astype("object")
+        return series
+    if isinstance(value, dict):
+        return {key: make_pickle_portable(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [make_pickle_portable(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(make_pickle_portable(item) for item in value)
+    return value
+
+
+def _portable_index(index: pd.Index) -> pd.Index:
+    if isinstance(index, pd.MultiIndex):
+        arrays = []
+        for level in range(index.nlevels):
+            values = index.get_level_values(level)
+            arrays.append(values.astype("object") if is_string_dtype(values.dtype) else values)
+        return pd.MultiIndex.from_arrays(arrays, names=index.names)
+    return index.astype("object") if is_string_dtype(index.dtype) else index
 
 
 def _timestamp(value: Any) -> pd.Timestamp:

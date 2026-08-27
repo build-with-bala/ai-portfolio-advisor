@@ -6,6 +6,7 @@ import ast
 import io
 import json
 import pickle
+import sys
 import urllib.request
 import warnings
 from pathlib import Path
@@ -22,6 +23,9 @@ from sklearn.feature_selection import mutual_info_regression
 from statsmodels.tsa.stattools import adfuller
 
 warnings.filterwarnings("ignore")
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from portfolio_advisor.core import make_pickle_portable
 
 NIFTY500_URL = "https://www.niftyindices.com/IndexConstituent/ind_nifty500list.csv"
 FALLBACK_SECTOR_UNIVERSE = {
@@ -129,7 +133,7 @@ def notebook_functions(notebook: Path) -> dict[str, object]:
         if nodes:
             module = ast.Module(body=nodes, type_ignores=[])
             ast.fix_missing_locations(module)
-            exec(compile(module, f"notebook-cell-{index}", "exec"), namespace)
+            exec(compile(module, f"notebook-cell-{index}", "exec"), namespace)  # noqa: S102
     return namespace
 
 
@@ -183,7 +187,7 @@ def main() -> None:
         try:
             info = yf.Ticker(ticker).info
             metadata_rows[ticker] = {key: info.get(key, np.nan) for key in keys}
-        except Exception as exc:  # provider metadata is optional for the artifact
+        except Exception as exc:  # noqa: BLE001 - provider metadata is optional for the artifact
             print(f"metadata unavailable for {ticker}: {exc}")
             metadata_rows[ticker] = {key: np.nan for key in keys}
     metadata = pd.DataFrame(metadata_rows).T.rename(columns={"marketCap": "market_cap"})
@@ -212,6 +216,7 @@ def main() -> None:
         "exporter_version": "2026-08-27-india-production-v2-nifty500",
         "market": "NSE India",
     }
+    bundle = make_pickle_portable(bundle)
     output = root / "data"
     output.mkdir(exist_ok=True)
     with (output / "artifacts.pkl").open("wb") as handle:
