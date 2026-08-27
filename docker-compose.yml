@@ -5,6 +5,11 @@ services:
       dockerfile: Dockerfile
     environment:
       ARTIFACTS_PATH: /app/data/artifacts.pkl
+      # In the multi-service topology the UI does NOT open its own broker
+      # connection; it consumes the live microservice as a provider.
+      LIVE_PROVIDER: remote
+      LIVE_SERVICE_URL: http://live:8900
+      LIVE_POLL_SECONDS: "5"
     volumes:
       - ./data:/app/data:ro
     ports:
@@ -12,6 +17,8 @@ services:
     restart: unless-stopped
     depends_on:
       api:
+        condition: service_healthy
+      live:
         condition: service_healthy
 
   api:
@@ -24,4 +31,25 @@ services:
       - ./data:/app/data:ro
     ports:
       - "8000:8000"
+    restart: unless-stopped
+
+  # Live-market microservice: owns the SINGLE upstream broker connection and the
+  # OAuth token lifecycle. Set LIVE_PROVIDER=upstox (or kite) plus the broker
+  # secrets to go live; it boots fine in paper mode without any credentials.
+  live:
+    build:
+      context: .
+      dockerfile: Dockerfile.live
+    environment:
+      ARTIFACTS_PATH: /app/data/artifacts.pkl
+      LIVE_PROVIDER: ${LIVE_PROVIDER:-paper}
+      # --- Upstox (set these in Coolify secret env, never in git) ---
+      # UPSTOX_CLIENT_ID, UPSTOX_CLIENT_SECRET, UPSTOX_REDIRECT_URI,
+      # UPSTOX_ACCESS_TOKEN (or POST /live/oauth/upstox/exchange after login)
+      # --- Zerodha Kite alternative ---
+      # KITE_API_KEY, KITE_ACCESS_TOKEN, KITE_INSTRUMENT_TOKENS
+    volumes:
+      - ./data:/app/data:ro
+    ports:
+      - "8900:8900"
     restart: unless-stopped

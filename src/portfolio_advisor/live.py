@@ -97,6 +97,71 @@ class PaperFeed(BaseFeed):
     source = "paper/no live provider"
 
 
+class RemotePollingFeed(BaseFeed):
+    """Consume the standalone live microservice instead of a broker directly.
+
+    The UI runs with ``LIVE_PROVIDER=remote`` and ``LIVE_SERVICE_URL`` pointing at
+    the live-service (which owns the single broker WebSocket). This feed polls the
+    service's ``/live/quotes`` snapshot and mirrors it into the local store, so all
+    of the existing blend/analysis logic keeps working unchanged. No broker
+    credentials ever touch the UI process.
+    """
+
+    source = "remote live-service"
+
+    def __init__(self, store: QuoteStore, base_url: str, interval: int = 5) -> None:
+        super().__init__(store)
+        self.base_url = base_url.rstrip("/")
+        self.interval = max(interval, 2)
+        self.stop_event = Event()
+        self.thread: Thread | None = None
+        self.upstream_source: str | None = None
+
+    def start(self) -> None:
+        if self.started:
+            return
+        self.started = True
+        self.thread = Thread(target=self._run, name="remote-live-poller", daemon=True)
+        self.thread.start()
+
+    def stop(self) -> None:
+        self.stop_event.set()
+        self.started = False
+
+    def _run(self) -> None:
+        while not self.stop_event.is_set():
+            try:
+                request = urllib.request.Request(
+                    f"{self.base_url}/live/quotes", headers={"User-Agent": "ai-portfolio-advisor-ui"}
+                )
+                with urllib.request.urlopen(request, timeout=10) as response:
+                    payload = json.loads(response.read().decode("utf-8"))
+                quotes = payload.get("quotes", payload) if isinstance(payload, Mapping) else []
+                if isinstance(quotes, Mapping):
+                    quotes = list(quotes.values())
+                for item in quotes or []:
+                    if not isinstance(item, Mapping):
+                        continue
+                    price = _number(item.get("price"))
+                    ticker = item.get("ticker")
+                    if ticker is None or price is None:
+                        continue
+                    self.upstream_source = item.get("source", self.upstream_source)
+                    self.store.update(
+                        Quote(
+                            ticker=str(ticker),
+                            price=price,
+                            previous_close=_number(item.get("previous_close")),
+                            timestamp=_tick_time(item.get("timestamp")),
+                            volume=_number(item.get("volume")),
+                            source=self.source,
+                        )
+                    )
+            except Exception as exc:  # noqa: BLE001 - the UI must survive service hiccups
+                self.last_error = f"live-service poll failed: {exc}"
+            self.stop_event.wait(self.interval)
+
+
 class YahooPollingFeed(BaseFeed):
     """Optional public polling fallback; never presented as exchange realtime."""
 
@@ -484,6 +549,9 @@ class LiveMarketService:
             except json.JSONDecodeError:
                 tokens = {}
             return ZerodhaKiteFeed(self.store, os.getenv("KITE_API_KEY", ""), os.getenv("KITE_ACCESS_TOKEN", ""), tokens)
+        if self.provider_name in {"remote", "microservice"}:
+            base_url = os.getenv("LIVE_SERVICE_URL", "http://live:8900")
+            return RemotePollingFeed(self.store, base_url, int(os.getenv("LIVE_POLL_SECONDS", "5")))
         if self.provider_name in {"yahoo", "polling"}:
             return YahooPollingFeed(self.store, tickers, int(os.getenv("LIVE_POLL_SECONDS", "60")))
         return PaperFeed(self.store)
