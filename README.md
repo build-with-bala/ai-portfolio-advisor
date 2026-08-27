@@ -23,7 +23,7 @@ an explicit data-quality boundary.
   coefficient, quantile coverage, and realized return by original signal.
 - A Streamlit frontend and an optional FastAPI JSON API. No Django and no
   JavaScript frontend are required.
-- An Indian-market live analyzer with a Zerodha Kite WebSocket adapter,
+- An Indian-market live analyzer with an Upstox Market Data Feed V3 WebSocket adapter,
   explicit delayed-data fallback, provider health, last-tick status, and a
   daily-ML-versus-intraday-overlay boundary.
 
@@ -108,8 +108,19 @@ The post-Step-18 notebook section retrains and exports the model for Indian NSE
 symbols such as `RELIANCE.NS` and `TCS.NS`. The app's live layer supports:
 
 - `LIVE_PROVIDER=zerodha` for the Kite Connect exchange WebSocket adapter.
+- `LIVE_PROVIDER=upstox` for the Upstox Market Data Feed V3 exchange WebSocket adapter.
 - `LIVE_PROVIDER=yahoo` for a clearly-labelled public polling fallback.
 - `LIVE_PROVIDER=paper` as the safe no-quote default.
+
+For Upstox, set `UPSTOX_ACCESS_TOKEN` to the current OAuth access token. The
+app automatically resolves `.NS` symbols through Upstox's daily NSE instrument
+master; an explicit `UPSTOX_INSTRUMENT_KEYS` JSON mapping can override that,
+for example `{"RELIANCE.NS":"NSE_EQ|<ISIN>"}`. The app key and secret are
+used only in the OAuth exchange; they are not needed by the running WebSocket
+and must not be committed. `UPSTOX_MAX_INSTRUMENTS` defaults to 100, matching
+the documented single-feed subscription limit; the daily model still covers
+the full research universe while the live overlay monitors the configured
+live subset.
 
 For Zerodha, set `KITE_API_KEY`, `KITE_ACCESS_TOKEN`, and
 `KITE_INSTRUMENT_TOKENS` (JSON mapping from `.NS` ticker to NSE instrument

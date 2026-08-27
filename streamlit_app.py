@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
+from urllib.parse import urlencode
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "src"))
@@ -553,9 +554,23 @@ def render_live(bundle: dict, artifact_path: str, profile: dict) -> None:
             metric_card(label, value, note)
     if status.get("error"):
         st.warning(f"Live provider status: {status['error']}")
-    if status["provider"] not in {"zerodha", "kite", "kiteconnect", "yahoo", "polling"}:
-        st.markdown('<div class="warning-box"><b>Exchange feed is not enabled.</b> Set <code>LIVE_PROVIDER=zerodha</code>, add the daily Kite access token and instrument-token mapping in Coolify, then restart the service. The paper mode is intentionally quote-free.</div>', unsafe_allow_html=True)
+    if status["provider"] not in {"zerodha", "kite", "kiteconnect", "upstox", "upstox_v3", "yahoo", "polling"}:
+        st.markdown('<div class="warning-box"><b>Exchange feed is not enabled.</b> Set <code>LIVE_PROVIDER=upstox</code>, add the daily Upstox OAuth access token and ticker-to-instrument mapping in Coolify, then restart the service. The paper mode is intentionally quote-free.</div>', unsafe_allow_html=True)
         return
+    if status["provider"] in {"upstox", "upstox_v3"}:
+        st.info("Upstox V3 is an exchange WebSocket feed. It needs a fresh OAuth access token; NSE_EQ|ISIN keys are resolved automatically unless an explicit mapping is configured. The app never treats a missing quote as zero.")
+        if status.get("subscribed_instruments"):
+            st.caption(f"Live coverage: {status['subscribed_instruments']} instruments via {status.get('instrument_mapping', 'configured mapping')}. The daily model still covers the full research universe.")
+        client_id = os.getenv("UPSTOX_CLIENT_ID", "")
+        redirect_uri = os.getenv("UPSTOX_REDIRECT_URI", "")
+        if client_id and redirect_uri:
+            auth_url = "https://api.upstox.com/v2/login/authorization/dialog?" + urlencode({
+                "response_type": "code",
+                "client_id": client_id,
+                "redirect_uri": redirect_uri,
+            })
+            st.link_button("Connect Upstox", auth_url, use_container_width=False)
+        st.caption("After OAuth, store the returned access token as UPSTOX_ACCESS_TOKEN in Coolify. Never place the app secret in the browser or GitHub.")
     if status["provider"] in {"yahoo", "polling"}:
         st.info("This provider is public polling and may be delayed or availability-limited. It is not presented as exchange realtime.")
     if st.button("Refresh live analyzer", type="primary"):

@@ -8,8 +8,11 @@ This keeps the distinction between a model forecast and a tick observable.
 
 from __future__ import annotations
 
+import gzip
+import io
 import json
 import os
+import urllib.request
 from collections import defaultdict, deque
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -221,6 +224,201 @@ class ZerodhaKiteFeed(BaseFeed):
         self.last_error = f"Kite WebSocket error ({code}): {reason}"
 
 
+class UpstoxFeed(BaseFeed):
+    """Upstox Market Data Feed V3 adapter.
+
+    Upstox delivers protobuf frames, but the official Python SDK decodes them
+    into dictionaries before emitting the ``message`` event.  The adapter
+    accepts an explicit ``ticker -> NSE_EQ|ISIN`` mapping because a Yahoo
+    symbol (for example ``RELIANCE.NS``) is not an Upstox instrument key.
+
+    The access token is deliberately read only from the environment. Upstox
+    access tokens are short-lived OAuth credentials; an app key and secret by
+    themselves cannot authorize the WebSocket feed. If no explicit mapping is
+    supplied, the current public Upstox NSE instrument master is used to map
+    the artifact's ``.NS`` symbols to ``NSE_EQ|ISIN`` keys.
+    """
+
+    source = "upstox market data websocket v3"
+
+    def __init__(
+        self,
+        store: QuoteStore,
+        access_token: str,
+        instrument_keys: Mapping[str, str],
+        max_instruments: int = 100,
+    ) -> None:
+        super().__init__(store)
+        self.access_token = access_token
+        self.instrument_keys = {
+            str(ticker): str(key)
+            for ticker, key in list(instrument_keys.items())[: max(1, max_instruments)]
+            if str(key).startswith("NSE_EQ|")
+        }
+        self.reverse_keys = {key: ticker for ticker, key in self.instrument_keys.items()}
+        self.client: Any = None
+        self.thread: Thread | None = None
+
+    def start(self) -> None:
+        if self.started:
+            return
+        if not self.access_token:
+            self.last_error = "Upstox needs UPSTOX_ACCESS_TOKEN from the OAuth token exchange."
+            return
+        if not self.instrument_keys:
+            self.last_error = (
+                "Upstox needs UPSTOX_INSTRUMENT_KEYS as JSON, for example "
+                '{"RELIANCE.NS":"NSE_EQ|<ISIN>"}.'
+            )
+            return
+        try:
+            import upstox_client  # type: ignore
+        except ImportError as exc:
+            self.last_error = f"upstox-python-sdk is unavailable: {exc}"
+            return
+        try:
+            configuration = upstox_client.Configuration()
+            configuration.access_token = self.access_token
+            self.client = upstox_client.MarketDataStreamerV3(
+                upstox_client.ApiClient(configuration),
+                list(self.reverse_keys),
+                "ltpc",
+            )
+            self.client.on("open", self._on_open)
+            self.client.on("message", self._on_message)
+            self.client.on("error", self._on_error)
+            self.client.on("close", self._on_close)
+            self.started = True
+            self.thread = Thread(target=self._connect, name="upstox-india-feed", daemon=True)
+            self.thread.start()
+        except Exception as exc:  # noqa: BLE001 - provider failures must be visible in status
+            self.last_error = f"Upstox setup failed: {exc}"
+
+    def stop(self) -> None:
+        self.started = False
+        if self.client is not None:
+            try:
+                disconnect = getattr(self.client, "disconnect", None)
+                if callable(disconnect):
+                    disconnect()
+            except Exception as exc:  # noqa: BLE001 - shutdown must remain best-effort
+                self.last_error = self.last_error or f"Upstox disconnect failed: {exc}"
+
+    def _connect(self) -> None:
+        try:
+            self.client.connect()
+        except Exception as exc:  # noqa: BLE001 - keep the UI alive when feed fails
+            self.started = False
+            self.last_error = f"Upstox WebSocket failed: {exc}"
+
+    def _on_open(self, *args: Any) -> None:
+        del args
+        self.last_error = None
+
+    def _on_message(self, message: Any) -> None:
+        payload = _as_mapping(message)
+        feeds = payload.get("feeds") if isinstance(payload, Mapping) else None
+        if not isinstance(feeds, Mapping):
+            return
+        for instrument_key, instrument_payload in feeds.items():
+            ticker = self.reverse_keys.get(str(instrument_key))
+            if ticker is None or not isinstance(instrument_payload, Mapping):
+                continue
+            ltpc = _find_mapping(instrument_payload, "ltpc") or instrument_payload
+            price = _number(ltpc.get("ltp"))
+            if price is None:
+                continue
+            timestamp = _tick_time(ltpc.get("ltt") or payload.get("currentTs"))
+            previous_close = _number(ltpc.get("cp"))
+            volume = _number(_find_value(instrument_payload, "vtt"))
+            self.store.update(
+                Quote(
+                    ticker=ticker,
+                    price=price,
+                    previous_close=previous_close,
+                    timestamp=timestamp,
+                    volume=volume,
+                    source=self.source,
+                )
+            )
+
+    def _on_close(self, *args: Any) -> None:
+        self.started = False
+        self.last_error = f"Upstox WebSocket closed: {' '.join(str(arg) for arg in args if arg is not None)}".strip()
+
+    def _on_error(self, *args: Any) -> None:
+        self.last_error = f"Upstox WebSocket error: {' '.join(str(arg) for arg in args if arg is not None)}".strip()
+
+
+def _as_mapping(value: Any) -> Mapping[str, Any]:
+    if isinstance(value, Mapping):
+        return value
+    to_dict = getattr(value, "to_dict", None)
+    if callable(to_dict):
+        converted = to_dict()
+        return converted if isinstance(converted, Mapping) else {}
+    return {}
+
+
+def upstox_nse_instrument_keys(tickers: list[str]) -> dict[str, str]:
+    """Resolve Yahoo-style NSE symbols through Upstox's public NSE master."""
+
+    desired = {str(ticker): str(ticker).removesuffix(".NS") for ticker in tickers}
+    url = os.getenv(
+        "UPSTOX_INSTRUMENT_MASTER_URL",
+        "https://assets.upstox.com/market-quote/instruments/exchange/NSE.json.gz",
+    )
+    request = urllib.request.Request(url, headers={"User-Agent": "ai-portfolio-advisor"})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response, gzip.GzipFile(
+            fileobj=io.BytesIO(response.read())
+        ) as compressed:
+            records = json.load(compressed)
+    except Exception:  # noqa: BLE001 - feed status reports the missing mapping
+        return {}
+    if isinstance(records, Mapping):
+        records = records.get("data", [])
+    if not isinstance(records, list):
+        return {}
+    resolved: dict[str, str] = {}
+    for record in records:
+        if not isinstance(record, Mapping) or record.get("segment") != "NSE_EQ":
+            continue
+        if record.get("instrument_type") not in {"EQ", "BE"}:
+            continue
+        symbol = str(record.get("trading_symbol", "")).strip()
+        instrument_key = str(record.get("instrument_key", "")).strip()
+        for ticker, wanted_symbol in desired.items():
+            if symbol == wanted_symbol and instrument_key.startswith("NSE_EQ|"):
+                resolved[ticker] = instrument_key
+    return resolved
+
+
+def _find_mapping(value: Any, key: str) -> Mapping[str, Any] | None:
+    if not isinstance(value, Mapping):
+        return None
+    candidate = value.get(key)
+    if isinstance(candidate, Mapping):
+        return candidate
+    for child in value.values():
+        found = _find_mapping(child, key)
+        if found is not None:
+            return found
+    return None
+
+
+def _find_value(value: Any, key: str) -> Any:
+    if not isinstance(value, Mapping):
+        return None
+    if key in value:
+        return value[key]
+    for child in value.values():
+        found = _find_value(child, key)
+        if found is not None:
+            return found
+    return None
+
+
 def _number(value: Any) -> float | None:
     try:
         value = float(value)
@@ -232,6 +430,13 @@ def _number(value: Any) -> float | None:
 def _tick_time(value: Any) -> datetime:
     if isinstance(value, datetime):
         return value.astimezone(IST) if value.tzinfo else value.replace(tzinfo=IST)
+    try:
+        timestamp = float(value)
+        if timestamp > 10_000_000_000:
+            timestamp /= 1_000
+        return datetime.fromtimestamp(timestamp, tz=IST)
+    except (TypeError, ValueError, OverflowError, OSError):
+        pass
     return datetime.now(IST)
 
 
@@ -253,6 +458,26 @@ class LiveMarketService:
         self.feed = self._make_feed(tickers)
 
     def _make_feed(self, tickers: list[str]) -> BaseFeed:
+        if self.provider_name in {"upstox", "upstox_v3"}:
+            access_token = os.getenv("UPSTOX_ACCESS_TOKEN", "")
+            try:
+                mapping = json.loads(os.getenv("UPSTOX_INSTRUMENT_KEYS", "{}"))
+            except json.JSONDecodeError:
+                mapping = {}
+            if not isinstance(mapping, Mapping):
+                mapping = {}
+            if not mapping:
+                bundle_mapping = self.bundle.get("upstox_instrument_keys", {})
+                mapping = bundle_mapping if isinstance(bundle_mapping, Mapping) else {}
+            if not mapping and access_token:
+                mapping = upstox_nse_instrument_keys(tickers)
+            mapping = {ticker: mapping[ticker] for ticker in tickers if ticker in mapping}
+            return UpstoxFeed(
+                self.store,
+                access_token,
+                mapping,
+                int(os.getenv("UPSTOX_MAX_INSTRUMENTS", "100")),
+            )
         if self.provider_name in {"zerodha", "kite", "kiteconnect"}:
             try:
                 tokens = json.loads(os.getenv("KITE_INSTRUMENT_TOKENS", "{}"))
@@ -272,7 +497,7 @@ class LiveMarketService:
     def status(self) -> dict[str, Any]:
         quotes = self.store.snapshot()
         latest = max((quote.timestamp for quote in quotes.values()), default=None)
-        return {
+        status = {
             "provider": self.provider_name,
             "source": self.feed.source,
             "running": self.feed.started,
@@ -280,8 +505,12 @@ class LiveMarketService:
             "last_tick": latest,
             "market_session": _session_status(),
             "error": self.feed.last_error,
-            "live_contract": "exchange websocket" if self.provider_name in {"zerodha", "kite", "kiteconnect"} else "not exchange realtime",
+            "live_contract": "exchange websocket" if self.provider_name in {"zerodha", "kite", "kiteconnect", "upstox", "upstox_v3"} else "not exchange realtime",
         }
+        if isinstance(self.feed, UpstoxFeed):
+            status["subscribed_instruments"] = len(self.feed.instrument_keys)
+            status["instrument_mapping"] = "explicit env/bundle" if os.getenv("UPSTOX_INSTRUMENT_KEYS") else "Upstox NSE master"
+        return status
 
     def history_frame(self) -> pd.DataFrame:
         """Return the in-process quote tape for the live chart."""
