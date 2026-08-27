@@ -1,0 +1,314 @@
+"""Indian-market quote adapters and the transparent intraday overlay.
+
+The trained model remains the daily research model from the notebook. A live
+quote does not silently retrain it. Instead, live prices update the displayed
+price, intraday return, and a clearly-labelled technical confirmation overlay.
+This keeps the distinction between a model forecast and a tick observable.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+from collections.abc import Mapping
+from dataclasses import dataclass
+from datetime import datetime, time
+from threading import Event, Lock, Thread
+from typing import Any
+from zoneinfo import ZoneInfo
+
+import numpy as np
+import pandas as pd
+
+from .core import build_recommendation_snapshot, jsonable
+
+IST = ZoneInfo("Asia/Kolkata")
+
+
+@dataclass
+class Quote:
+    ticker: str
+    price: float
+    previous_close: float | None
+    timestamp: datetime
+    volume: float | None = None
+    source: str = "unknown"
+
+    @property
+    def intraday_return(self) -> float | None:
+        if self.previous_close is None or self.previous_close <= 0:
+            return None
+        return self.price / self.previous_close - 1.0
+
+
+class QuoteStore:
+    def __init__(self) -> None:
+        self._lock = Lock()
+        self._quotes: dict[str, Quote] = {}
+
+    def update(self, quote: Quote) -> None:
+        with self._lock:
+            self._quotes[quote.ticker] = quote
+
+    def snapshot(self) -> dict[str, Quote]:
+        with self._lock:
+            return dict(self._quotes)
+
+
+class BaseFeed:
+    source = "unknown"
+
+    def __init__(self, store: QuoteStore) -> None:
+        self.store = store
+        self.started = False
+        self.last_error: str | None = None
+
+    def start(self) -> None:
+        self.started = True
+
+    def stop(self) -> None:
+        self.started = False
+
+
+class PaperFeed(BaseFeed):
+    source = "paper/no live provider"
+
+
+class YahooPollingFeed(BaseFeed):
+    """Optional public polling fallback; never presented as exchange realtime."""
+
+    source = "yahoo polling / delayed or availability-limited"
+
+    def __init__(self, store: QuoteStore, tickers: list[str], interval: int = 60) -> None:
+        super().__init__(store)
+        self.tickers = tickers
+        self.interval = max(interval, 30)
+        self.stop_event = Event()
+        self.thread: Thread | None = None
+
+    def start(self) -> None:
+        if self.started:
+            return
+        self.started = True
+        self.thread = Thread(target=self._run, name="yahoo-india-poller", daemon=True)
+        self.thread.start()
+
+    def stop(self) -> None:
+        self.stop_event.set()
+        self.started = False
+
+    def _run(self) -> None:
+        try:
+            import yfinance as yf  # type: ignore
+        except ImportError as exc:
+            self.last_error = f"yfinance is unavailable: {exc}"
+            return
+        while not self.stop_event.is_set():
+            try:
+                for ticker in self.tickers:
+                    frame = yf.Ticker(ticker).history(period="1d", interval="1m", auto_adjust=True)
+                    if frame.empty or "Close" not in frame:
+                        continue
+                    close = pd.to_numeric(frame["Close"], errors="coerce").dropna()
+                    if close.empty:
+                        continue
+                    # Public intraday history does not reliably carry a previous
+                    # exchange close, so do not manufacture an intraday return.
+                    self.store.update(Quote(ticker, float(close.iloc[-1]), None, datetime.now(IST), source=self.source))
+            except Exception as exc:  # noqa: BLE001 - provider failures must not kill the service
+                self.last_error = str(exc)
+            self.stop_event.wait(self.interval)
+
+
+class ZerodhaKiteFeed(BaseFeed):
+    """Zerodha Kite Connect WebSocket adapter.
+
+    ``KITE_INSTRUMENT_TOKENS`` is a JSON mapping such as
+    ``{"RELIANCE.NS": 738561, "TCS.NS": 2953217}``. Credentials are read
+    only from environment variables and are never returned by ``status``.
+    """
+
+    source = "zerodha kite websocket"
+
+    def __init__(self, store: QuoteStore, api_key: str, access_token: str, tokens: Mapping[str, int]) -> None:
+        super().__init__(store)
+        self.api_key = api_key
+        self.access_token = access_token
+        self.tokens = {str(key): int(value) for key, value in tokens.items()}
+        self.reverse_tokens = {value: key for key, value in self.tokens.items()}
+        self.client: Any = None
+        self.thread: Thread | None = None
+
+    def start(self) -> None:
+        if self.started:
+            return
+        try:
+            from kiteconnect import KiteTicker  # type: ignore
+        except ImportError as exc:
+            self.last_error = f"kiteconnect is unavailable: {exc}"
+            return
+        if not self.api_key or not self.access_token or not self.tokens:
+            self.last_error = "Kite provider needs KITE_API_KEY, KITE_ACCESS_TOKEN, and KITE_INSTRUMENT_TOKENS."
+            return
+        self.client = KiteTicker(self.api_key, self.access_token)
+        self.client.on_ticks = self._on_ticks
+        self.client.on_connect = self._on_connect
+        self.client.on_close = self._on_close
+        self.client.on_error = self._on_error
+        self.started = True
+        self.thread = Thread(target=self.client.connect, kwargs={"threaded": False}, name="kite-india-feed", daemon=True)
+        self.thread.start()
+
+    def stop(self) -> None:
+        self.started = False
+        if self.client is not None:
+            try:
+                self.client.close()
+            except Exception as exc:  # noqa: BLE001 - shutdown must remain best-effort
+                self.last_error = self.last_error or f"Kite close failed: {exc}"
+
+    def _on_connect(self, ws: Any, response: Any) -> None:
+        del response
+        ws.subscribe(list(self.reverse_tokens))
+        ws.set_mode(ws.MODE_QUOTE, list(self.reverse_tokens))
+
+    def _on_ticks(self, ws: Any, ticks: list[dict[str, Any]]) -> None:
+        del ws
+        for tick in ticks:
+            token = tick.get("instrument_token")
+            ticker = self.reverse_tokens.get(token)
+            price = _number(tick.get("last_price"))
+            if ticker is None or price is None:
+                continue
+            ohlc = tick.get("ohlc") or {}
+            self.store.update(
+                Quote(
+                    ticker=ticker,
+                    price=price,
+                    previous_close=_number(ohlc.get("close")),
+                    timestamp=_tick_time(tick.get("exchange_timestamp") or tick.get("last_trade_time")),
+                    volume=_number(tick.get("volume_traded")),
+                    source=self.source,
+                )
+            )
+
+    def _on_close(self, ws: Any, code: Any, reason: Any) -> None:
+        del ws
+        self.last_error = f"Kite WebSocket closed ({code}): {reason}"
+
+    def _on_error(self, ws: Any, code: Any, reason: Any) -> None:
+        del ws
+        self.last_error = f"Kite WebSocket error ({code}): {reason}"
+
+
+def _number(value: Any) -> float | None:
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return None
+    return value if np.isfinite(value) else None
+
+
+def _tick_time(value: Any) -> datetime:
+    if isinstance(value, datetime):
+        return value.astimezone(IST) if value.tzinfo else value.replace(tzinfo=IST)
+    return datetime.now(IST)
+
+
+def _session_status(now: datetime | None = None) -> str:
+    now = now or datetime.now(IST)
+    if now.weekday() >= 5:
+        return "CLOSED / weekend"
+    if time(9, 15) <= now.time() <= time(15, 30):
+        return "OPEN / NSE cash session"
+    return "CLOSED / outside NSE cash session"
+
+
+class LiveMarketService:
+    def __init__(self, bundle: Mapping[str, Any]) -> None:
+        self.bundle = bundle
+        self.store = QuoteStore()
+        self.provider_name = os.getenv("LIVE_PROVIDER", "paper").lower()
+        tickers = sorted(str(item) for item in bundle["res"]["ticker"].unique())
+        self.feed = self._make_feed(tickers)
+
+    def _make_feed(self, tickers: list[str]) -> BaseFeed:
+        if self.provider_name in {"zerodha", "kite", "kiteconnect"}:
+            try:
+                tokens = json.loads(os.getenv("KITE_INSTRUMENT_TOKENS", "{}"))
+            except json.JSONDecodeError:
+                tokens = {}
+            return ZerodhaKiteFeed(self.store, os.getenv("KITE_API_KEY", ""), os.getenv("KITE_ACCESS_TOKEN", ""), tokens)
+        if self.provider_name in {"yahoo", "polling"}:
+            return YahooPollingFeed(self.store, tickers, int(os.getenv("LIVE_POLL_SECONDS", "60")))
+        return PaperFeed(self.store)
+
+    def start(self) -> None:
+        self.feed.start()
+
+    def stop(self) -> None:
+        self.feed.stop()
+
+    def status(self) -> dict[str, Any]:
+        quotes = self.store.snapshot()
+        latest = max((quote.timestamp for quote in quotes.values()), default=None)
+        return {
+            "provider": self.provider_name,
+            "source": self.feed.source,
+            "running": self.feed.started,
+            "quotes_received": len(quotes),
+            "last_tick": latest,
+            "market_session": _session_status(),
+            "error": self.feed.last_error,
+            "live_contract": "exchange websocket" if self.provider_name in {"zerodha", "kite", "kiteconnect"} else "not exchange realtime",
+        }
+
+    def analyze(self, profile: Mapping[str, Any] | None = None, asof: Any | None = None) -> dict[str, Any]:
+        self.start()
+        snapshot = build_recommendation_snapshot(self.bundle, profile, asof)
+        quotes = self.store.snapshot()
+        analysis = snapshot["analysis"].copy()
+        analysis["live_price"] = analysis["ticker"].map(lambda ticker: quotes[ticker].price if ticker in quotes else None)
+        analysis["intraday_return"] = analysis["ticker"].map(lambda ticker: quotes[ticker].intraday_return if ticker in quotes else None)
+        analysis["live_source"] = analysis["ticker"].map(lambda ticker: quotes[ticker].source if ticker in quotes else None)
+        analysis["live_last_tick"] = analysis["ticker"].map(lambda ticker: quotes[ticker].timestamp if ticker in quotes else None)
+        analysis["live_technical_confirmation"] = analysis["intraday_return"].map(
+            lambda value: float(50 + 50 * np.tanh(value / 0.01)) if value is not None else None
+        )
+        analysis["live_overall_score"] = analysis.apply(
+            lambda row: float(0.85 * row["overall_score"] + 0.15 * row["live_technical_confirmation"])
+            if pd.notna(row.get("live_technical_confirmation")) else row["overall_score"],
+            axis=1,
+        )
+        analysis["live_recommendation"] = analysis.apply(_live_decision, axis=1)
+        snapshot["analysis"] = analysis
+        if not snapshot["picks"].empty:
+            picks = snapshot["picks"].copy()
+            live = analysis.set_index("ticker")
+            picks["live_price"] = picks["ticker"].map(live["live_price"])
+            picks["intraday_return"] = picks["ticker"].map(live["intraday_return"])
+            picks["live_overall_score"] = picks["ticker"].map(live["live_overall_score"])
+            picks["live_recommendation"] = picks["ticker"].map(live["live_recommendation"])
+            picks["live_target_shares"] = picks.apply(
+                lambda row: int((row["target_notional"] / row["live_price"]) // 1)
+                if pd.notna(row.get("live_price")) and row["live_price"] > 0 else row["target_shares"], axis=1
+            )
+            snapshot["picks"] = picks
+        snapshot["live"] = self.status()
+        return snapshot
+
+
+def _live_decision(row: pd.Series) -> str:
+    base = str(row.get("recommendation", "WATCH"))
+    confirmation = row.get("live_technical_confirmation")
+    if pd.isna(confirmation):
+        return base
+    if "BUY" in base and confirmation < 35:
+        return "WATCH / live confirmation weak"
+    if base == "WATCH" and confirmation > 70 and row.get("overall_score", 0) >= 50:
+        return "BUY / live confirmation strong"
+    return base
+
+
+def live_payload(service: LiveMarketService, profile: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    return jsonable(service.analyze(profile))

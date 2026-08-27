@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -22,6 +23,7 @@ from portfolio_advisor.core import (
     stock_detail,
     validation_analysis,
 )
+from portfolio_advisor.live import LiveMarketService
 
 st.set_page_config(
     page_title="Signal Desk | AI Portfolio Advisor",
@@ -128,6 +130,11 @@ def cached_bundle(path: str) -> dict:
     return load_bundle(path)
 
 
+@st.cache_resource(show_spinner=False)
+def cached_live_service(path: str) -> LiveMarketService:
+    return LiveMarketService(load_bundle(path))
+
+
 def sidebar_profile(bundle: dict) -> dict:
     metadata = bundle.get("metadata")
     sectors = []
@@ -140,21 +147,21 @@ def sidebar_profile(bundle: dict) -> dict:
         st.caption("Profile-aware research terminal")
         st.markdown("### Investor profile")
         with st.form("profile_form"):
-            risk = st.selectbox("Risk posture", list(preset_map), index=1)
+            risk = st.selectbox("Risk posture", list(preset_map), index=1, key="profile_risk")
             preset = preset_map[risk]
             st.caption(preset["description"])
-            capital = st.number_input("Investable capital", min_value=1000.0, value=100000.0, step=5000.0)
-            max_holdings = st.slider("Maximum holdings", 1, min(20, max(len(tickers), 1)), min(8, max(len(tickers), 1)))
-            min_confidence = st.slider("Minimum forecast confidence", 0.0, 1.0, float(preset["min_confidence"]), 0.05)
-            min_expected_return = st.slider("Minimum expected 21-day return", -10.0, 25.0, 0.0, 0.5) / 100
-            max_volatility = st.slider("Maximum annual volatility", 10.0, 150.0, float(preset["max_annual_volatility"] * 100), 5.0) / 100
-            max_drawdown = st.slider("Maximum trailing drawdown", 10.0, 90.0, float(preset["max_drawdown"] * 100), 5.0) / 100
-            max_position = st.slider("Maximum position weight", 5.0, 100.0, float(preset["max_position_weight"] * 100), 5.0) / 100
-            min_fundamental = st.slider("Minimum fundamental score", 0, 100, int(preset["min_fundamental_score"]), 5)
-            sector_preference = st.selectbox("Sector preference", ["Any", *sectors] if sectors else ["Any"])
-            exclude_sectors = st.multiselect("Exclude sectors", sectors)
-            exclude_tickers = st.multiselect("Exclude tickers", tickers)
-            include_watchlist = st.checkbox("Show watchlist when no stock clears all gates", True)
+            capital = st.number_input("Investable capital", min_value=1000.0, value=100000.0, step=5000.0, key="profile_capital")
+            max_holdings = st.slider("Maximum holdings", 1, min(20, max(len(tickers), 1)), min(8, max(len(tickers), 1)), key="profile_max_holdings")
+            min_confidence = st.slider("Minimum forecast confidence", 0.0, 1.0, float(preset["min_confidence"]), 0.05, key="profile_min_confidence")
+            min_expected_return = st.slider("Minimum expected 21-day return", -10.0, 25.0, 0.0, 0.5, key="profile_min_return") / 100
+            max_volatility = st.slider("Maximum annual volatility", 10.0, 150.0, float(preset["max_annual_volatility"] * 100), 5.0, key="profile_max_volatility") / 100
+            max_drawdown = st.slider("Maximum trailing drawdown", 10.0, 90.0, float(preset["max_drawdown"] * 100), 5.0, key="profile_max_drawdown") / 100
+            max_position = st.slider("Maximum position weight", 5.0, 100.0, float(preset["max_position_weight"] * 100), 5.0, key="profile_max_position") / 100
+            min_fundamental = st.slider("Minimum fundamental score", 0, 100, int(preset["min_fundamental_score"]), 5, key="profile_min_fundamental")
+            sector_preference = st.selectbox("Sector preference", ["Any", *sectors] if sectors else ["Any"], key="profile_sector")
+            exclude_sectors = st.multiselect("Exclude sectors", sectors, key="profile_exclude_sectors")
+            exclude_tickers = st.multiselect("Exclude tickers", tickers, key="profile_exclude_tickers")
+            include_watchlist = st.checkbox("Show watchlist when no stock clears all gates", True, key="profile_watchlist")
             submitted = st.form_submit_button("Run profile analysis", type="primary", use_container_width=True)
         if submitted or "profile" not in st.session_state:
             st.session_state["profile"] = {
@@ -414,6 +421,57 @@ def render_validation(bundle: dict) -> None:
     )
 
 
+def render_live(bundle: dict, artifact_path: str, profile: dict) -> None:
+    st.markdown('<div class="section-label">05 / India live analyzer</div>', unsafe_allow_html=True)
+    service = cached_live_service(artifact_path)
+    service.start()
+    status = service.status()
+    cols = st.columns(4)
+    for column, (label, value, note) in zip(cols, [
+        ("Provider", str(status["provider"]).upper(), status["source"]),
+        ("Market", status["market_session"], "Asia/Kolkata"),
+        ("Quotes received", str(status["quotes_received"]), "current process"),
+        ("Last tick", str(status["last_tick"])[:19] if status["last_tick"] else "—", "provider timestamp"),
+    ]):
+        with column:
+            metric_card(label, value, note)
+    if status.get("error"):
+        st.warning(f"Live provider status: {status['error']}")
+    if status["provider"] not in {"zerodha", "kite", "kiteconnect", "yahoo", "polling"}:
+        st.markdown('<div class="warning-box"><b>Exchange feed is not enabled.</b> Set <code>LIVE_PROVIDER=zerodha</code>, add the daily Kite access token and instrument-token mapping in Coolify, then restart the service. The paper mode is intentionally quote-free.</div>', unsafe_allow_html=True)
+        return
+    if status["provider"] in {"yahoo", "polling"}:
+        st.info("This provider is public polling and may be delayed or availability-limited. It is not presented as exchange realtime.")
+    if st.button("Refresh live analyzer", type="primary"):
+        st.rerun()
+    if status["quotes_received"] == 0:
+        st.info("Waiting for the first quote. Keep the process running during the NSE cash session.")
+        return
+    live_snapshot = service.analyze(profile)
+    live = live_snapshot["analysis"].copy()
+    live = live.sort_values(["live_overall_score", "overall_score"], ascending=False).head(20)
+    columns = [
+        "ticker", "live_recommendation", "live_price", "intraday_return",
+        "live_technical_confirmation", "live_overall_score", "exp_ret_21d", "sector",
+    ]
+    show = live[[column for column in columns if column in live]].rename(columns={
+        "ticker": "Ticker", "live_recommendation": "Live decision", "live_price": "Live price",
+        "intraday_return": "Intraday", "live_technical_confirmation": "Live technical",
+        "live_overall_score": "Live score", "exp_ret_21d": "Daily model / 21d", "sector": "Sector",
+    })
+    for column in ["Intraday", "Daily model / 21d"]:
+        if column in show:
+            show[column] = show[column].map(fmt_pct)
+    if "Live technical" in show:
+        show["Live technical"] = show["Live technical"].map(lambda value: fmt_number(value, 0))
+    if "Live score" in show:
+        show["Live score"] = show["Live score"].map(lambda value: fmt_number(value, 0))
+    if "Live price" in show:
+        show["Live price"] = show["Live price"].map(lambda value: fmt_number(value, 2))
+    st.dataframe(show, use_container_width=True, hide_index=True)
+    st.caption("The daily ML forecast is kept separate from the live technical confirmation overlay; a tick does not silently retrain the model.")
+
+
 def render_method(bundle: dict, snapshot: dict) -> None:
     st.markdown('<div class="section-label">06 / Method & data provenance</div>', unsafe_allow_html=True)
     quality = data_quality_report(bundle, snapshot["asof"])
@@ -447,7 +505,7 @@ def render_method(bundle: dict, snapshot: dict) -> None:
 
 def main() -> None:
     inject_css()
-    artifact_path = str(Path(__file__).resolve().parent / "data" / "artifacts.pkl")
+    artifact_path = os.getenv("ARTIFACTS_PATH", str(Path(__file__).resolve().parent / "data" / "artifacts.pkl"))
     try:
         bundle = cached_bundle(artifact_path)
     except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
@@ -470,8 +528,8 @@ def main() -> None:
         return
     render_header(snapshot)
     render_metrics(snapshot)
-    tab_overview, tab_research, tab_portfolio, tab_validation, tab_method = st.tabs([
-        "Overview", "Stock research", "Portfolio lab", "Validation", "Method & data"
+    tab_overview, tab_research, tab_portfolio, tab_validation, tab_live, tab_method = st.tabs([
+        "Overview", "Stock research", "Portfolio lab", "Validation", "India live", "Method & data"
     ])
     with tab_overview:
         render_recommendations(snapshot)
@@ -482,6 +540,8 @@ def main() -> None:
         render_portfolio_lab(snapshot)
     with tab_validation:
         render_validation(bundle)
+    with tab_live:
+        render_live(bundle, artifact_path, profile)
     with tab_method:
         render_method(bundle, snapshot)
     st.caption(f"Artifact date: {snapshot['asof'].date()} · Profile: {profile['risk']} · Educational research tool, not investment advice.")

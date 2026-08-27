@@ -23,6 +23,9 @@ an explicit data-quality boundary.
   coefficient, quantile coverage, and realized return by original signal.
 - A Streamlit frontend and an optional FastAPI JSON API. No Django and no
   JavaScript frontend are required.
+- An Indian-market live analyzer with a Zerodha Kite WebSocket adapter,
+  explicit delayed-data fallback, provider health, last-tick status, and a
+  daily-ML-versus-intraday-overlay boundary.
 
 ## Repository layout
 
@@ -41,7 +44,8 @@ docker-compose.yml                UI + API deployment
 ## Artifact handoff from Colab
 
 The notebook is the training surface. Run the original research cells through
-Step 18, then run the new Step 19 exporter. It writes:
+Step 18, then run Step 19 to retrain the production universe for India, Step 20
+to export, and Steps 21–22 to validate and hand off the product. It writes:
 
 - `artifacts.pkl` — model outputs, prices, models, features, fundamentals, and metadata.
 - `metadata.csv` — optional sector, industry, market-cap, and additional fundamentals.
@@ -98,7 +102,28 @@ curl -X POST http://localhost:8000/api/v1/recommendations \
   }'
 ```
 
-## Coolify deployment
+## Indian-market live feed
+
+The post-Step-18 notebook section retrains and exports the model for Indian NSE
+symbols such as `RELIANCE.NS` and `TCS.NS`. The app's live layer supports:
+
+- `LIVE_PROVIDER=zerodha` for the Kite Connect exchange WebSocket adapter.
+- `LIVE_PROVIDER=yahoo` for a clearly-labelled public polling fallback.
+- `LIVE_PROVIDER=paper` as the safe no-quote default.
+
+For Zerodha, set `KITE_API_KEY`, `KITE_ACCESS_TOKEN`, and
+`KITE_INSTRUMENT_TOKENS` (JSON mapping from `.NS` ticker to NSE instrument
+token) as Coolify secrets. `KITE_API_SECRET` is needed only by the login/token
+generation flow; it is not sent to the running WebSocket feed. The access token
+is normally rotated according to the broker's session policy. Never put any of
+these values in GitHub or the browser.
+
+The daily quantile model is not silently retrained on every tick. Live prices
+update a visible intraday technical-confirmation overlay, and the UI shows the
+provider, quote count, last tick, and whether the feed is exchange WebSocket or
+not.
+
+## Coolify deployment at `fn.iimbg.com`
 
 ### Recommended first deployment: UI only
 
@@ -106,7 +131,7 @@ Create a Coolify application from this repository, choose the Dockerfile
 builder, expose port `8501`, and mount a persistent/read-only artifact path so
 `/app/data/artifacts.pkl` exists. The health path is
 `/_stcore/health`. Set the public domain only after the container reports
-healthy.
+healthy. Configure the FQDN as `https://fn.iimbg.com`.
 
 ### UI + API
 

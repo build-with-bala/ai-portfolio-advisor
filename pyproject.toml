@@ -9,6 +9,7 @@ description = "Profile-aware portfolio recommendations from technical and fundam
 requires-python = ">=3.11,<3.14"
 dependencies = [
   "fastapi>=0.115,<1",
+  "kiteconnect>=5,<6",
   "lightgbm>=4.5,<5",
   "numpy>=1.26,<3",
   "pandas>=2.2,<3",
@@ -33,5 +34,5 @@ line-length = 100
 target-version = "py311"
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = [".", "src"]
 testpaths = ["tests"]

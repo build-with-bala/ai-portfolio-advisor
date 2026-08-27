@@ -12,3 +12,5 @@ data/*.json
 data/*.csv
 artifacts.pkl
 *.log
+output/playwright/
+.playwright-cli/

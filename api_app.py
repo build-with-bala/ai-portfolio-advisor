@@ -24,6 +24,7 @@ from portfolio_advisor.core import (
     stock_detail,
     validation_analysis,
 )
+from portfolio_advisor.live import LiveMarketService
 
 
 class ProfileRequest(BaseModel):
@@ -61,10 +62,15 @@ def get_bundle() -> dict:
     return load_bundle()
 
 
+@lru_cache(maxsize=1)
+def get_live_service() -> LiveMarketService:
+    return LiveMarketService(get_bundle())
+
+
 def _require_bundle() -> dict:
     try:
         return get_bundle()
-    except (FileNotFoundError, ValueError) as exc:
+    except (FileNotFoundError, TypeError, ValueError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
@@ -125,3 +131,22 @@ def validation() -> dict:
 @app.get("/api/v1/data-quality")
 def data_quality() -> dict:
     return jsonable(data_quality_report(_require_bundle()))
+
+
+@app.get("/api/v1/live/status")
+def live_status() -> dict:
+    try:
+        service = get_live_service()
+        service.start()
+        return jsonable(service.status())
+    except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/api/v1/live/analyzer")
+def live_analyzer(request: ProfileRequest) -> dict:
+    try:
+        service = get_live_service()
+        return jsonable(service.analyze(request.model_dump(), request.asof))
+    except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
