@@ -1,0 +1,27 @@
+services:
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      ARTIFACTS_PATH: /app/data/artifacts.pkl
+    volumes:
+      - ./data:/app/data:ro
+    ports:
+      - "8501:8501"
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    environment:
+      ARTIFACTS_PATH: /app/data/artifacts.pkl
+    volumes:
+      - ./data:/app/data:ro
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
