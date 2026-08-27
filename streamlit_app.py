@@ -258,6 +258,34 @@ def render_metrics(snapshot: dict) -> None:
             metric_card(label, value, note)
 
 
+_FEATURE_LABELS = {
+    "MACD_signal": "MACD momentum", "RSI_14": "RSI", "fracdiff_close": "price trend",
+    "OBV_delta": "volume flow", "Stoch_K": "stochastic", "Williams_R": "Williams %R",
+    "ret_5": "5-day momentum", "ret_21": "21-day momentum", "vol_21": "low volatility",
+    "ATR_14": "range", "Boll_BW": "Bollinger width", "f_PE": "valuation (P/E)",
+    "f_PB": "valuation (P/B)", "f_ROE": "return on equity", "f_DE": "balance sheet",
+    "f_NPM": "net margin", "f_DivYld": "dividend yield", "f_RevG": "revenue growth",
+}
+
+
+def _humanize_feature(name: object) -> str:
+    key = str(name)
+    return _FEATURE_LABELS.get(key, key.replace("f_", "").replace("_", " "))
+
+
+def bull_case(row) -> tuple[str, str]:
+    """Return (upside %, one-line bull narrative) from the model's 90th-pct forecast + drivers."""
+    drivers: list[str] = []
+    for column in ("technical_evidence", "fundamental_evidence"):
+        evidence = row.get(column)
+        if isinstance(evidence, (list, tuple)) and len(evidence):
+            drivers.append(_humanize_feature(evidence[0]))
+    if not drivers:
+        drivers = ["momentum"]
+    lead = " and ".join(dict.fromkeys(drivers[:2]))  # de-dup, keep order
+    return fmt_pct(row.get("bull_return_21d")), f"Upside if {lead} keep confirming."
+
+
 def render_insights(snapshot: dict) -> None:
     """Explain what the current profile and evidence imply in plain language."""
 
@@ -288,6 +316,11 @@ def render_insights(snapshot: dict) -> None:
             notes.append("The leading pick is fundamentally strong but technical confirmation is weaker; staged entry is more appropriate than chasing price.")
         else:
             notes.append("The leading pick has mixed pillar scores; keep the position capped and review the evidence ledger before acting.")
+    if not picks.empty:
+        notes.append(
+            f"**Bull case for the book:** a **{fmt_pct(summary.get('bull_return_21d'))}** weighted 90th-percentile 21-day upside "
+            f"versus a {fmt_pct(summary.get('expected_return_21d'))} base case and a {fmt_pct(summary.get('bear_return_21d'))} bear case."
+        )
     risk_note = f"Portfolio fit: {summary['sector_count']} sectors, {fmt_pct(summary.get('cash_weight'))} cash, and {fmt_pct(summary.get('annual_volatility'))} estimated annual volatility."
     notes.append(risk_note)
     left, right = st.columns([1.4, 1])
@@ -353,6 +386,7 @@ def render_recommendations(snapshot: dict) -> None:
             for column, (_, row) in zip(columns, picks.iloc[start:start + 3].iterrows()):
                 decision = row["recommendation"]
                 cls = "signal-buy" if "BUY" in decision else "signal-watch" if "WATCH" in decision else "signal-pass"
+                bull_up, bull_txt = bull_case(row)
                 with column:
                     st.markdown(
                         f'<div class="signal-card"><div class="{cls}">{decision}</div>'
@@ -360,6 +394,7 @@ def render_recommendations(snapshot: dict) -> None:
                         f'<div class="small-copy">{row.get("sector", "Unknown")} · {row.get("industry", "Unknown")}</div>'
                         f'<hr style="border-color:#203442">'
                         f'<div class="small-copy">Base case <b style="color:#79f2c0">{fmt_pct(row.get("exp_ret_21d"))}</b> · confidence {fmt_number(row.get("evidence_confidence"), 2)}</div>'
+                        f'<div class="small-copy">Bull case <b style="color:#9dffdb">{bull_up}</b> (90th-pct) · {bull_txt}</div>'
                         f'<div class="small-copy">Technical {fmt_number(row.get("technical_score"), 0)}/100 · Fundamental {fmt_number(row.get("fundamental_score"), 0)}/100</div>'
                         f'<div class="evidence" style="margin-top:12px">{row.get("decision_reason", "")}</div></div>',
                         unsafe_allow_html=True,
