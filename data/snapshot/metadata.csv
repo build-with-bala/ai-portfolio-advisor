@@ -1,0 +1,61 @@
+,sector,industry,market_cap,forwardPE,trailingEps,earningsGrowth,grossMargins,operatingMargins,currentRatio,quickRatio,beta,recommendationKey
+ABB.NS,Capital Goods & Defence,Specialty Industrial Machinery,1434619609088,64.50844,73.41,0.03,0.37280998,0.11459,2.193,1.691,0.488,hold
+APOLLOHOSP.NS,Pharma & Healthcare,Medical Care Facilities,1102253129728,35.187973,145.26,0.341,0.35206002,0.12167,,,0.175,strong_buy
+AXISBANK.NS,Banks & NBFC,Banks - Regional,3876647337984,10.313905,88.93,0.218,0.0,0.49181998,,,0.42,strong_buy
+BAJAJ-AUTO.NS,Automobiles,Auto Manufacturers,2648284594176,20.27059,420.5,0.458,0.34187,0.21514,,,0.657,buy
+BEL.NS,Capital Goods & Defence,Aerospace & Defense,2684881731584,32.75449,8.4,0.083,0.47842997,0.22135,,,0.312,strong_buy
+BPCL.NS,"Oil, Gas & Energy",Oil & Gas Refining & Marketing,1223027458048,7.2150855,40.09,,0.12755,-0.04048,,,0.861,hold
+BRITANNIA.NS,FMCG,Packaged Foods,1143064625152,36.487694,108.11,0.136,0.41423,0.15212,,,0.421,buy
+CIPLA.NS,Pharma & Healthcare,Drug Manufacturers - Specialty & Generic,1055725322240,20.617584,41.7,-0.392,0.6328,0.12549,,,0.092,buy
+COALINDIA.NS,Metals & Mining,Thermal Coal,2522712899584,7.210106,50.63,0.012,0.74757004,0.21113001,,,0.022,buy
+DABUR.NS,FMCG,Household & Personal Products,668426960896,28.686363,11.1,0.153,0.47741002,0.16476,,,0.418,buy
+DEEPAKNTR.NS,Chemicals,Chemicals,216060215296,25.532742,57.44,2.074,0.26048002,0.18486999,,,0.487,buy
+DIVISLAB.NS,Pharma & Healthcare,Drug Manufacturers - Specialty & Generic,2485051457536,61.97756,110.21,0.657,0.61237997,0.36655998,,,0.226,hold
+DLF.NS,Real Estate & Construction,Real Estate - Development,1576649752576,25.06141,17.96,0.042,0.46511,0.089940004,,,0.483,strong_buy
+DMART.NS,Consumer Discretionary & Retail,Discount Stores,2338529476608,52.16588,46.91,0.114,0.15192,0.06447,,,0.252,hold
+DRREDDY.NS,Pharma & Healthcare,Drug Manufacturers - Specialty & Generic,982926557184,20.052664,39.74,-0.687,0.50176,0.04251,1.902,1.161,0.25,hold
+EICHERMOT.NS,Automobiles,Auto Manufacturers,1857825538048,24.862133,210.15,0.213,0.42308998,0.19798,,,0.244,buy
+ETERNAL.NS,Consumer Discretionary & Retail,Internet Retail,2936980635648,84.68548,0.47,2.333,0.35189,0.0023700001,,,0.239,buy
+GAIL.NS,"Oil, Gas & Energy",Utilities - Regulated Gas,1102640840704,9.117515,15.03,0.972,0.18752001,0.14834,,,0.541,buy
+GODREJPROP.NS,Real Estate & Construction,Real Estate - Development,462081458176,13.892331,53.13,-0.417,0.42856,-0.6225,,,0.652,buy
+HAL.NS,Capital Goods & Defence,Aerospace & Defense,3108064722944,26.907028,139.38,0.149,0.51704,0.15674,,,0.495,buy
+HCLTECH.NS,IT Services,Information Technology Services,3184416784384,14.692633,64.28,0.084,0.34004003,0.16877002,2.222,2.033,0.03,hold
+HDFCBANK.NS,Banks & NBFC,Banks - Regional,10673442521088,11.052473,45.75,0.181,0.0,0.33291999,,,0.412,strong_buy
+HEROMOTOCO.NS,Automobiles,Auto Manufacturers,971985715200,14.938534,272.08,-0.172,0.31653,0.116280004,,,0.486,buy
+HINDALCO.NS,Metals & Mining,Aluminum,1975988125696,7.998345,73.71,0.751,0.31314,0.13668999,,,0.952,buy
+HINDUNILVR.NS,FMCG,Household & Personal Products,4333821231104,34.72462,44.6,0.084,0.50369,0.20725,,,0.327,buy
+ICICIBANK.NS,Banks & NBFC,Banks - Regional,9683948535808,14.465494,77.36,0.138,0.0,0.38509998,,,0.261,strong_buy
+INFY.NS,IT Services,Information Technology Services,4038192529408,12.46418,73.4,0.053,0.29676,0.21173,1.862,1.594,0.116,buy
+IOC.NS,"Oil, Gas & Energy",Oil & Gas Refining & Marketing,1782806347776,6.7039714,24.44,,0.1663,-0.0013,,,0.818,buy
+ITC.NS,FMCG,Tobacco,3195281866752,15.179782,15.84,-0.16,0.58284,0.24867001,,,-0.063,buy
+JSWENERGY.NS,Utilities & Power,Utilities - Independent Power Producers,855443374080,27.630604,11.09,-0.395,0.66886,0.38092,,,0.266,buy
+JSWSTEEL.NS,Metals & Mining,Steel,2868637335552,16.118284,101.35,1.13,0.42285,0.15299,,,0.628,buy
+JUBLFOOD.NS,Consumer Discretionary & Retail,Restaurants,281221660672,48.425823,5.58,0.06,0.52591,0.096829996,,,0.186,buy
+KOTAKBANK.NS,Banks & NBFC,Banks - Regional,4327328448512,18.518147,20.4,0.225,0.0,0.34761003,,,0.33,buy
+LT.NS,Capital Goods & Defence,Engineering & Construction,4987652407296,20.143492,120.55,0.14,0.37425,0.10609999,,,0.522,buy
+M&M.NS,Automobiles,Auto Manufacturers,3303537115136,17.496994,164.27,0.334,0.38589,0.17031,,,0.291,strong_buy
+MARUTI.NS,Automobiles,Auto Manufacturers,3530111844352,18.8975,455.9,-0.091,0.26352,0.04828,,,0.26,buy
+NESTLEIND.NS,FMCG,Packaged Foods,2543446654976,53.12255,19.77,0.481,0.55135,0.21170999,,,0.433,buy
+NTPC.NS,Utilities & Power,Utilities - Regulated Electric,3003057700864,11.092058,28.63,0.118,0.48183,0.21673,,,0.354,strong_buy
+OBEROIRLTY.NS,Real Estate & Construction,Real Estate - Development,604779642880,15.632229,72.31,0.289,0.62612,0.53744,,,0.437,buy
+ONGC.NS,"Oil, Gas & Energy",Oil & Gas Integrated,2765145505792,5.2927547,34.6,0.214,0.35334,0.02931,,,0.157,buy
+PHOENIXLTD.NS,Real Estate & Construction,Real Estate - Diversified,633519013888,35.74447,35.9,0.233,0.93678004,0.50796,,,0.345,buy
+PIDILITIND.NS,Chemicals,Specialty Chemicals,1487170437120,46.04605,25.98,0.296,0.54792,0.24093,,,0.43,buy
+PIIND.NS,Chemicals,Agricultural Inputs,318582915072,19.774012,76.8,-0.389,0.57629,0.15491,,,0.356,hold
+POWERGRID.NS,Utilities & Power,Utilities - Regulated Electric,2275392618496,12.637827,17.1,-0.008,0.97596,0.55737996,,,0.181,buy
+PRESTIGE.NS,Real Estate & Construction,Real Estate - Diversified,607760351232,24.64195,26.45,-0.193,0.58805,0.23696,,,0.563,strong_buy
+RELIANCE.NS,"Oil, Gas & Energy",Oil & Gas Refining & Marketing,15941252415488,16.497118,55.22,-0.224,0.33335,0.12331,,,0.194,strong_buy
+SBIN.NS,Banks & NBFC,Banks - Regional,8676780802048,8.936523,93.3,0.099,0.0,0.35717,,,0.415,strong_buy
+SIEMENS.NS,Capital Goods & Defence,Specialty Industrial Machinery,1295922495488,53.80348,40.79,4.061,0.28199,0.074889995,,,0.568,hold
+SRF.NS,Chemicals,Conglomerates,736628244480,27.554697,72.93,0.756,0.48316002,0.2217,,,0.163,buy
+SUNPHARMA.NS,Pharma & Healthcare,Drug Manufacturers - Specialty & Generic,4222349737984,27.157467,50.4,0.274,0.78924006,0.23247999,,,0.135,buy
+TATAPOWER.NS,Utilities & Power,Utilities - Independent Power Producers,1072515710976,20.382324,12.07,0.109,0.35709998,0.14453,,,0.389,buy
+TATASTEEL.NS,Metals & Mining,Steel,2145083457536,9.606705,8.85,0.114,0.56355,0.09252,,,0.834,buy
+TCS.NS,IT Services,Information Technology Services,7511149641728,12.818464,137.66,0.046,0.40389,0.23963,2.276,2.045,0.182,buy
+TECHM.NS,IT Services,Information Technology Services,1325518684160,17.043398,57.84,0.283,0.35758,0.14409,,,0.151,buy
+TITAN.NS,Consumer Discretionary & Retail,Luxury Goods,3868238020608,49.06688,64.88,0.628,0.20475,0.123339996,,,0.229,buy
+TORNTPOWER.NS,Utilities & Power,Utilities - Independent Power Producers,612041228288,20.111038,46.11,-0.127,0.26631,0.14002,,,0.642,buy
+TRENT.NS,Consumer Discretionary & Retail,Apparel Retail,1533735993344,56.20195,33.92,0.207,0.4301,0.1249,,,0.383,buy
+UPL.NS,Chemicals,Agricultural Inputs,406623944704,10.211897,24.13,,0.49945,0.06561,,,0.539,buy
+VEDL.NS,Metals & Mining,Other Industrial Metals & Mining,988305358848,7.871876,23.77,0.722,0.53911996,0.3116,,,0.362,buy
+WIPRO.NS,IT Services,Information Technology Services,1566922637312,11.394737,12.59,0.009,0.29045,0.15698,1.672,1.575,0.408,hold

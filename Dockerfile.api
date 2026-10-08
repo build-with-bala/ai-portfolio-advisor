@@ -16,7 +16,7 @@ RUN pip install --upgrade pip \
     && pip install -r requirements.txt
 
 COPY src ./src
-COPY streamlit_app.py api_app.py ./
+COPY app.py api_app.py ./
 
 RUN mkdir -p /app/data
 

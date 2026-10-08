@@ -1,0 +1,743 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Portfolio Advisor: a forecast is a range</title>
+<meta name="description" content="A research tool that ranks NSE stocks for your risk profile and shows the evidence behind every call, including a pessimistic, median and optimistic 21-trading-day outlook. Education only; it places no trades.">
+<meta name="theme-color" content="#17174a">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --indigo:#17174a;      /* ground */
+  --indigo-deep:#101038; /* recessed panels */
+  --indigo-lift:#24246b; /* raised surfaces, tracks */
+  --line:#3a3a8a;        /* rules */
+  --ivory:#f5efdd;       /* text, the median */
+  --haze:#bcbae3;        /* secondary text */
+  --marigold:#f6a81c;    /* the band */
+  --rose:#f08597;        /* pulls a forecast down */
+  --display:"Bricolage Grotesque","Avenir Next Condensed","Helvetica Neue",Arial,sans-serif;
+  --text:"Source Serif 4","Iowan Old Style","Palatino Linotype",Georgia,serif;
+  --gutter:clamp(20px,4.4vw,64px);
+  --maxw:1320px;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{margin:0;background:var(--indigo);color:var(--ivory);font-family:var(--text);font-size:clamp(1.0625rem,.35vw + .98rem,1.1875rem);line-height:1.6;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+h1,h2,h3,p,ul,ol,dl,dd,figure{margin:0;padding:0}
+ul,ol{list-style:none}
+a{color:inherit}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--marigold);outline-offset:3px;border-radius:2px}
+::selection{background:var(--marigold);color:var(--indigo)}
+.wrap{max-width:var(--maxw);margin-inline:auto;padding-inline:var(--gutter)}
+.skip{position:absolute;left:-999px;top:8px;background:var(--marigold);color:var(--indigo);padding:8px 14px;font-family:var(--display);font-weight:600;z-index:20}
+.skip:focus{left:8px}
+
+/* type */
+.display{font-family:var(--display);font-variation-settings:"wdth" 82;font-weight:700;letter-spacing:-.025em;line-height:.94}
+h2{font-family:var(--display);font-variation-settings:"wdth" 86;font-weight:650;letter-spacing:-.02em;line-height:1.02;font-size:clamp(2rem,4.3vw,3.75rem);max-width:17ch;text-wrap:balance}
+h3{font-family:var(--display);font-variation-settings:"wdth" 92;font-weight:600;font-size:1.25rem;line-height:1.2;letter-spacing:-.005em}
+.lede{font-size:clamp(1.125rem,.6vw + 1rem,1.375rem);line-height:1.5;max-width:44ch}
+.body{max-width:58ch;color:var(--haze)}
+.body + .body{margin-top:1em}
+.body strong{color:var(--ivory);font-weight:600}
+.ui{font-family:var(--display);font-variation-settings:"wdth" 96;font-feature-settings:"tnum"}
+.note{font-family:var(--display);font-variation-settings:"wdth" 96;font-size:.8125rem;line-height:1.4;color:var(--haze)}
+.note b{color:var(--marigold);font-weight:600}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:52px;padding:0 26px;font-family:var(--display);font-variation-settings:"wdth" 92;font-weight:650;font-size:1.0625rem;text-decoration:none;border-radius:999px;border:1.5px solid var(--marigold);transition:background-color .18s,color .18s}
+.btn-solid{background:var(--marigold);color:var(--indigo)}
+.btn-solid:hover{background:var(--ivory);border-color:var(--ivory)}
+.btn-line{color:var(--ivory);border-color:var(--line)}
+.btn-line:hover{border-color:var(--ivory)}
+.btn-sm{min-height:42px;padding:0 20px;font-size:.9375rem}
+
+/* nav */
+.nav{display:flex;align-items:center;justify-content:space-between;gap:24px;padding-block:22px}
+.mark{display:flex;align-items:center;gap:12px;font-family:var(--display);font-variation-settings:"wdth" 90;font-weight:700;font-size:1.0625rem;text-decoration:none;letter-spacing:-.01em;white-space:nowrap}
+.mark svg{flex:none}
+.nav-links{display:flex;gap:30px;font-family:var(--display);font-variation-settings:"wdth" 94;font-size:.9375rem}
+.nav-links a{text-decoration:none;color:var(--haze);padding-block:8px}
+.nav-links a:hover{color:var(--ivory)}
+@media (max-width:900px){.nav-links{display:none}}
+
+/* hero */
+.hero-head{display:grid;grid-template-columns:minmax(0,7.4fr) minmax(0,4.6fr);gap:clamp(24px,5vw,80px);align-items:end;padding-top:clamp(28px,5vh,64px)}
+.hero h1{font-size:clamp(3.1rem,9.6vw,9rem)}
+.hero h1 span{display:block}
+.hero-side{padding-bottom:.6rem}
+.cta-row{display:flex;flex-wrap:wrap;gap:12px;margin-top:28px}
+.fan{position:relative;margin-top:clamp(28px,5vh,56px)}
+.fan-stage{height:clamp(300px,46vh,470px);position:relative;touch-action:pan-y}
+.fan-stage svg{display:block;width:100%;height:100%;overflow:visible}
+.fan-foot{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 24px;padding-block:14px 0}
+.fan-read{color:var(--ivory)}
+.fan text{font-family:var(--display);font-variation-settings:"wdth" 94;fill:var(--haze);font-size:13px}
+.fan text.strong{fill:var(--ivory);font-weight:600}
+.fan .lab text{paint-order:stroke;stroke:var(--indigo);stroke-width:5px;stroke-linejoin:round}
+.fan .hist{fill:none;stroke:var(--ivory);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.fan .med{fill:none;stroke:var(--ivory);stroke-width:2;stroke-dasharray:1 7;stroke-linecap:round}
+.fan .today{stroke:var(--line);stroke-width:1}
+.fan .bar{fill:var(--marigold);transform-box:fill-box;transition:opacity .15s}
+.fan .bar.on{opacity:1 !important}
+.fan .dot{fill:var(--ivory)}
+.js .fan.anim .hist{stroke-dasharray:1;stroke-dashoffset:1;animation:draw 1.1s cubic-bezier(.6,0,.2,1) .15s forwards}
+.js .fan.anim .bar{transform:scaleY(0);animation:open .55s cubic-bezier(.2,.8,.2,1) forwards}
+.js .fan.anim .med,.js .fan.anim .lab{opacity:0;animation:fade .5s ease 1.9s forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+@keyframes open{to{transform:scaleY(1)}}
+@keyframes fade{to{opacity:1}}
+@media (max-width:820px){
+  .hero-head{grid-template-columns:1fr;gap:22px}
+  .hero-side{padding-bottom:0}
+  .fan-stage{height:300px}
+}
+
+/* sections */
+.sec{padding-block:clamp(76px,10vw,150px)}
+.sec-rule{border-top:1px solid var(--line)}
+.split{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:clamp(32px,6vw,96px);align-items:start}
+.split > .lead > * + *{margin-top:22px}
+@media (max-width:900px){.split{grid-template-columns:1fr}}
+
+/* the book */
+.book-top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:end;gap:28px 48px}
+.book-top .body{margin-top:22px}
+.seg{display:inline-flex;border:1.5px solid var(--line);border-radius:999px;padding:4px;gap:2px;max-width:100%}
+.seg button{background:none;border:0;border-radius:999px;min-height:42px;padding:0 18px;font-family:var(--display);font-variation-settings:"wdth" 92;font-weight:600;font-size:.9375rem;color:var(--haze);cursor:pointer;transition:background-color .18s,color .18s}
+.seg button:hover{color:var(--ivory)}
+.seg button[aria-pressed="true"]{background:var(--ivory);color:var(--indigo)}
+.seg-label{display:block;margin-bottom:10px}
+.book{margin-top:clamp(32px,4vw,56px);border-top:1.5px solid var(--ivory)}
+.row{display:grid;grid-template-columns:1.1fr repeat(4,minmax(0,1fr)) 1.9fr 1.5fr;gap:0 clamp(14px,2vw,30px);align-items:center;padding:20px 0;border-bottom:1px solid var(--line)}
+.row.head{padding:12px 0;align-items:end}
+.row.head span{font-family:var(--display);font-variation-settings:"wdth" 94;font-size:.8125rem;color:var(--haze);line-height:1.25}
+.name{font-family:var(--display);font-variation-settings:"wdth" 90;font-weight:650;font-size:1.25rem}
+.pill{display:block}
+.pill i{display:none;font-style:normal;font-family:var(--display);font-size:.75rem;color:var(--haze);margin-bottom:5px}
+.track{display:block;height:8px;background:var(--indigo-lift);border-radius:4px;overflow:hidden}
+.track b{display:block;height:100%;background:var(--ivory);border-radius:4px}
+.rng{position:relative;height:26px}
+.rng::before{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:var(--line)}
+.rng::after{content:"";position:absolute;left:50%;top:2px;bottom:2px;width:1px;background:var(--haze);opacity:.6}
+.rng b{position:absolute;top:7px;height:12px;background:var(--marigold);border-radius:3px}
+.rng u{position:absolute;top:2px;width:3px;height:22px;margin-left:-1.5px;background:var(--ivory);border-radius:2px;z-index:1}
+.verdict{display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+.state{display:inline-block;font-family:var(--display);font-variation-settings:"wdth" 88;font-weight:700;font-size:.8125rem;letter-spacing:.04em;padding:5px 12px;border-radius:4px;border:1.5px solid transparent;white-space:nowrap}
+.state.s3{background:var(--marigold);color:var(--indigo);border-color:var(--marigold)}
+.state.s2{color:var(--marigold);border-color:var(--marigold)}
+.state.s1{color:var(--ivory);border-color:var(--haze);border-style:dashed}
+.state.s0{color:var(--haze);border-color:var(--line)}
+.why{font-family:var(--display);font-variation-settings:"wdth" 96;font-size:.8125rem;color:var(--haze);line-height:1.3}
+.row.dim .name,.row.dim .track b{opacity:.45}
+.row.dim .rng b{opacity:.4}
+.book-foot{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px 32px;margin-top:16px}
+.states{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:clamp(20px,3vw,44px);margin-top:clamp(44px,6vw,80px)}
+.states p{margin-top:12px;color:var(--haze);font-size:1rem;line-height:1.5}
+@media (max-width:980px){
+  .row{grid-template-columns:repeat(4,minmax(0,1fr));gap:14px 12px;padding:22px 0}
+  .row.head{display:none}
+  .name{grid-column:1 / 3}
+  .verdict{grid-column:3 / 5;grid-row:1;align-items:flex-end;text-align:right}
+  .rng{grid-column:1 / -1}
+  .pill i{display:block}
+  .states{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:480px){.states{grid-template-columns:1fr}.seg button{padding:0 13px;font-size:.875rem}}
+
+/* pillars */
+.pillars{border-top:1.5px solid var(--ivory)}
+.pillars li{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,7fr);gap:8px 32px;padding:24px 0;border-bottom:1px solid var(--line)}
+.pillars h3{font-size:1.5rem}
+.pillars p{color:var(--haze);max-width:52ch}
+.pillars p b{color:var(--ivory);font-weight:600}
+@media (max-width:560px){.pillars li{grid-template-columns:1fr}}
+
+/* allocation */
+.alloc{background:var(--indigo-deep);border-radius:14px;padding:clamp(20px,3vw,40px)}
+.alloc-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr)) minmax(0,1.15fr);column-gap:clamp(4px,1vw,14px)}
+.tree{grid-column:1 / 7;height:clamp(90px,12vw,150px)}
+.tree svg{display:block;width:100%;height:100%}
+.tree path{fill:none;stroke:var(--haze);stroke-width:1.5;vector-effect:non-scaling-stroke}
+.leaf{font-family:var(--display);font-variation-settings:"wdth" 84;font-weight:650;font-size:clamp(.75rem,1.5vw,1rem);text-align:center;padding:8px 0 10px;transition:opacity .3s;white-space:nowrap}
+.leaf.off{opacity:.35}
+@media (max-width:560px){.leaf i{display:none}.leaf{font-size:.9375rem}}
+.leaf i{font-style:normal}
+.cols{grid-column:1 / -1;display:grid;grid-template-columns:subgrid;height:clamp(170px,23vw,320px);position:relative;border-top:1px solid var(--line)}
+.col{position:relative}
+.col b{position:absolute;left:14%;right:14%;top:0;height:0;background:var(--marigold);border-radius:0 0 4px 4px;transition:height .6s cubic-bezier(.2,.8,.2,1)}
+.col.capped b::after{content:"";position:absolute;left:-18%;right:-18%;bottom:-3px;height:3px;background:var(--ivory)}
+.col.cash b{background:repeating-linear-gradient(135deg,var(--haze) 0 2px,transparent 2px 7px);border:1.5px solid var(--haze);border-top:0}
+.capline{position:absolute;left:0;width:calc(100% * 6 / 7.15);border-top:1.5px dashed var(--ivory);transition:top .6s cubic-bezier(.2,.8,.2,1);pointer-events:none}
+.capline span{position:absolute;right:0;top:6px;font-family:var(--display);font-size:.75rem;color:var(--ivory);white-space:nowrap}
+.alloc-foot{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 24px;margin-top:18px}
+.steps{counter-reset:s;margin-top:30px;border-top:1px solid var(--line)}
+.steps li{counter-increment:s;display:grid;grid-template-columns:2.2rem 1fr;padding:14px 0;border-bottom:1px solid var(--line);color:var(--haze)}
+.steps li::before{content:counter(s);font-family:var(--display);font-weight:700;color:var(--marigold)}
+.steps b{color:var(--ivory);font-weight:600}
+
+/* drivers */
+.drivers{border-top:1.5px solid var(--ivory)}
+.drv{display:grid;grid-template-columns:minmax(0,11rem) 1fr;gap:16px;align-items:center;padding:15px 0;border-bottom:1px solid var(--line)}
+.drv span{font-family:var(--display);font-variation-settings:"wdth" 94;font-size:.9375rem}
+.drv div{position:relative;height:14px}
+.drv div::before{content:"";position:absolute;left:50%;top:-8px;bottom:-8px;width:1px;background:var(--haze)}
+.drv b{position:absolute;top:0;height:14px;border-radius:3px}
+.drv b.up{left:50%;background:var(--marigold)}
+.drv b.dn{right:50%;background:var(--rose)}
+.drv-key{display:flex;justify-content:space-between;gap:16px;margin-top:12px}
+@media (max-width:480px){.drv{grid-template-columns:minmax(0,7.5rem) 1fr;gap:10px}}
+
+/* validation */
+.tl{display:grid;grid-template-columns:minmax(0,6fr) minmax(0,.8fr) minmax(0,2.4fr);gap:0;margin-top:8px}
+.tl div{height:72px;display:flex;align-items:center;padding-inline:14px;font-family:var(--display);font-variation-settings:"wdth" 88;font-weight:600;font-size:.9375rem;white-space:nowrap;overflow:hidden}
+.tl .tr{background:var(--indigo-lift);border-radius:6px 0 0 6px}
+.tl .em{background:repeating-linear-gradient(135deg,var(--line) 0 2px,transparent 2px 7px);padding:0}
+.tl .te{background:var(--marigold);color:var(--indigo);border-radius:0 6px 6px 0}
+.tl-key{display:grid;grid-template-columns:minmax(0,6fr) minmax(0,3.2fr);margin-top:10px;gap:12px}
+.tl-key span:last-child{text-align:right}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:0 clamp(20px,3vw,40px);margin-top:36px;border-top:1.5px solid var(--ivory)}
+.stat{padding:20px 0;border-bottom:1px solid var(--line)}
+.stat dt{font-family:var(--display);font-variation-settings:"wdth" 94;font-size:.875rem;color:var(--haze);line-height:1.3}
+.stat dd{font-family:var(--display);font-variation-settings:"wdth" 80;font-weight:700;font-size:clamp(2.2rem,4vw,3.2rem);line-height:1.05;margin-top:6px;font-feature-settings:"tnum"}
+.stat small{display:block;font-family:var(--display);font-weight:400;font-variation-settings:"wdth" 96;font-size:.75rem;color:var(--haze);margin-top:6px;line-height:1.35}
+.caution{margin-top:28px;padding:16px 18px;border-left:3px solid var(--marigold);background:var(--indigo-deep);font-size:1rem;line-height:1.5;max-width:62ch}
+[hidden]{display:none !important}
+
+/* live + staging */
+.duo{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(32px,6vw,96px)}
+.duo h3{font-size:clamp(1.5rem,2.4vw,2rem);font-variation-settings:"wdth" 86;max-width:20ch}
+.duo p{margin-top:16px}
+@media (max-width:760px){.duo{grid-template-columns:1fr}}
+
+/* hood */
+.hood{background:var(--indigo-deep)}
+.pipe{border-top:1.5px solid var(--ivory)}
+.pipe li{display:grid;grid-template-columns:minmax(0,3.2fr) minmax(0,7fr);gap:6px 28px;padding:16px 0;border-bottom:1px solid var(--line);font-size:1rem;line-height:1.5}
+.pipe b{font-family:var(--display);font-variation-settings:"wdth" 92;font-weight:600}
+.pipe span{color:var(--haze)}
+@media (max-width:560px){.pipe li{grid-template-columns:1fr}}
+.stack{margin-top:26px;color:var(--haze);font-size:1rem;max-width:58ch}
+
+/* limits */
+.limits{background:var(--marigold);color:var(--indigo)}
+.limits h2{max-width:15ch}
+.limits ::selection{background:var(--indigo);color:var(--marigold)}
+.limits :focus-visible{outline-color:var(--indigo)}
+.nots{border-top:1.5px solid var(--indigo)}
+.nots li{padding:16px 0;border-bottom:1px solid rgba(23,23,74,.35);font-size:1.0625rem;line-height:1.45}
+.nots b{font-family:var(--display);font-variation-settings:"wdth" 90;font-weight:700}
+.limits .btn-solid{background:var(--indigo);color:var(--ivory);border-color:var(--indigo)}
+.limits .btn-solid:hover{background:var(--indigo-deep)}
+.limits .btn-line{color:var(--indigo);border-color:var(--indigo)}
+.limits .btn-line:hover{background:rgba(23,23,74,.1)}
+
+footer{padding-block:44px 56px;font-size:.9375rem;color:var(--haze)}
+.foot{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,4fr);gap:28px 64px}
+.foot p{max-width:66ch;line-height:1.55}
+.foot p + p{margin-top:12px}
+.foot nav{display:flex;flex-direction:column;gap:10px;font-family:var(--display);align-items:flex-start}
+.foot nav a{color:var(--ivory)}
+@media (max-width:760px){.foot{grid-template-columns:1fr}}
+
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation:none !important;transition:none !important}
+  .js .fan.anim .hist{stroke-dashoffset:0}
+  .js .fan.anim .bar{transform:none}
+  .js .fan.anim .med,.js .fan.anim .lab{opacity:1}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="nav">
+      <a class="mark" href="#top" id="top" aria-label="AI Portfolio Advisor, top of page">
+        <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect x="2" y="12" width="4" height="6" rx="1" fill="#f6a81c"/><rect x="9" y="9" width="4" height="12" rx="1" fill="#f6a81c"/><rect x="16" y="6" width="4" height="18" rx="1" fill="#f6a81c"/><rect x="23" y="3" width="4" height="24" rx="1" fill="#f6a81c"/><path d="M0 15h30" stroke="#f5efdd" stroke-width="2"/></svg>
+        AI Portfolio Advisor
+      </a>
+      <nav class="nav-links" aria-label="Sections">
+        <a href="#book">The book</a>
+        <a href="#sizing">Sizing</a>
+        <a href="#validation">Validation</a>
+        <a href="#hood">Under the hood</a>
+      </nav>
+      <a class="btn btn-solid btn-sm" data-app href="https://fn.iimbg.com">Open the app</a>
+    </div>
+
+    <div class="hero-head">
+      <h1 class="display"><span>A forecast</span><span>is a range.</span></h1>
+      <div class="hero-side">
+        <p class="lede">AI Portfolio Advisor ranks NSE stocks for your risk profile and shows the evidence behind every call. Each one comes with a pessimistic, a median and an optimistic outlook for the next 21 trading days, so you see how unsure the model is.</p>
+        <div class="cta-row">
+          <a class="btn btn-solid" data-app href="https://fn.iimbg.com">Open the app</a>
+          <a class="btn btn-line" href="https://github.com/build-with-bala/ai-portfolio-advisor">Read the code on GitHub</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <figure class="fan anim" id="fan">
+    <div class="fan-stage" id="fanStage" role="img" aria-label="Illustrative schematic: a price history line reaches today, then splits into 21 daily bars that grow taller with each trading day, showing the forecast range widening from pessimistic to optimistic around a median."></div>
+    <figcaption class="wrap fan-foot">
+      <span class="note"><b>Illustrative schematic.</b> Not a forecast for any stock, and not a result.</span>
+      <span class="note fan-read" id="fanRead" aria-live="polite">Each bar is one trading day. The further out, the wider the range.</span>
+    </figcaption>
+  </figure>
+</header>
+
+<main id="main">
+
+<section class="sec" id="book">
+  <div class="wrap">
+    <div class="book-top">
+      <div>
+        <h2>You state your limits. It returns a ranked book.</h2>
+        <p class="body">Tell it your risk profile, your capital and the limits you will not cross. It scores every stock in its universe on four kinds of evidence and marks each one with one of four calls. Change the profile and the same stocks get different answers.</p>
+      </div>
+      <div>
+        <span class="note seg-label" id="segLabel">Try a risk profile</span>
+        <div class="seg" role="group" aria-labelledby="segLabel" id="seg">
+          <button type="button" data-p="conservative" aria-pressed="false">Conservative</button>
+          <button type="button" data-p="moderate" aria-pressed="true">Moderate</button>
+          <button type="button" data-p="aggressive" aria-pressed="false">Aggressive</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="book" id="bookRows" aria-live="polite">
+      <div class="row head" aria-hidden="true">
+        <span>Stock</span><span>Technical</span><span>Fundamental</span><span>Model forecast</span><span>Portfolio fit</span><span>21-day range, P10 to P90, with the median</span><span>Call and reason</span>
+      </div>
+    </div>
+    <div class="book-foot">
+      <span class="note"><b>Illustrative schematic.</b> Six made-up stocks with made-up scores, to show how the book reads. No real company or result.</span>
+      <span class="note">Bars are scores out of 100. The centre mark on each range is zero return.</span>
+    </div>
+
+    <div class="states">
+      <div><span class="state s3">STRONG BUY</span><p>The pillars agree and every limit you set is cleared with room to spare.</p></div>
+      <div><span class="state s2">BUY</span><p>Enough evidence, and inside your limits for volatility, drawdown and position size.</p></div>
+      <div><span class="state s1">WATCH</span><p>Close, but something holds it back. It stays visible with the reason, so a near miss is never dressed up as a pick.</p></div>
+      <div><span class="state s0">PASS</span><p>Not enough evidence for this profile. If nothing qualifies, the book says so.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec sec-rule" id="pillars">
+  <div class="wrap split">
+    <div class="lead">
+      <h2>Four kinds of evidence, each one on show.</h2>
+      <p class="body">A single score hides disagreement. Here the four pillars sit side by side for every stock, so you can see when the chart looks strong but the balance sheet does not.</p>
+    </div>
+    <ul class="pillars">
+      <li><h3>Technical</h3><p><b>What the price has been doing.</b> Momentum, trend and how jumpy the stock is. Strong momentum adds to the score; high volatility takes away from it.</p></li>
+      <li><h3>Fundamental</h3><p><b>What the business looks like.</b> Valuation, profitability, debt, margins, dividends and growth, each compared with the other stocks in the universe.</p></li>
+      <li><h3>Model forecast</h3><p><b>What the model expects.</b> Three forecasts for the next 21 trading days: a pessimistic case (P10), a median (P50) and an optimistic case (P90). A wide gap means low confidence.</p></li>
+      <li><h3>Portfolio fit</h3><p><b>What it does to your book.</b> Recent volatility, worst fall, and how closely the stock moves with what you would already hold.</p></li>
+    </ul>
+  </div>
+</section>
+
+<section class="sec sec-rule" id="sizing">
+  <div class="wrap split">
+    <div class="lead">
+      <h2>Then it sizes each position, and shows the cash left over.</h2>
+      <p class="body">Sizing uses Hierarchical Risk Parity. Stocks that move together are grouped, and risk is shared between groups before it is shared within them, so three similar bank stocks do not quietly become half your portfolio.</p>
+      <ol class="steps">
+        <li><span><b>Group</b> the chosen stocks by how alike their price moves are.</span></li>
+        <li><span><b>Split risk</b> down the tree, group by group.</span></li>
+        <li><span><b>Cap</b> any position that exceeds your profile's limit.</span></li>
+        <li><span><b>Round</b> to whole shares at your capital.</span></li>
+        <li><span><b>Show the cash</b> that could not be placed, instead of hiding it.</span></li>
+      </ol>
+    </div>
+    <div>
+      <figure class="alloc" id="alloc">
+        <div class="alloc-grid">
+          <div class="tree" aria-hidden="true">
+            <svg viewBox="0 0 600 150" preserveAspectRatio="none"><path d="M150 150V110H250V150M50 150V75H200V110M450 150V100H550V150M350 150V65H500V100M125 75V25H425V65M275 25V0"/></svg>
+          </div>
+          <div></div>
+          <div class="leaf" data-k="A"><i>Stock </i>A</div>
+          <div class="leaf" data-k="B"><i>Stock </i>B</div>
+          <div class="leaf" data-k="D"><i>Stock </i>D</div>
+          <div class="leaf" data-k="E"><i>Stock </i>E</div>
+          <div class="leaf" data-k="F"><i>Stock </i>F</div>
+          <div class="leaf" data-k="C"><i>Stock </i>C</div>
+          <div class="leaf">Cash</div>
+          <div class="cols" id="cols" role="img" aria-label="Illustrative allocation: column length is position size, a dashed line marks the position cap, and the last column is uninvested cash.">
+            <div class="col" data-k="A"><b></b></div>
+            <div class="col" data-k="B"><b></b></div>
+            <div class="col" data-k="D"><b></b></div>
+            <div class="col" data-k="E"><b></b></div>
+            <div class="col" data-k="F"><b></b></div>
+            <div class="col" data-k="C"><b></b></div>
+            <div class="col cash" data-k="cash"><b></b></div>
+            <div class="capline" id="capline"><span>position cap</span></div>
+          </div>
+        </div>
+        <figcaption class="alloc-foot">
+          <span class="note"><b>Illustrative schematic.</b> Follows the profile you picked above.</span>
+          <span class="note" id="allocRead"></span>
+        </figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section class="sec sec-rule" id="why">
+  <div class="wrap split">
+    <div class="lead">
+      <h2>Ask why, and get an answer per stock.</h2>
+      <p class="body">Every stock page lists the inputs that pushed its forecast up or down, and by how much. If a call rests on one noisy signal, you can see that before you act on it.</p>
+      <p class="body">The method is SHAP, a standard way to attribute a model's output to its inputs.</p>
+    </div>
+    <figure>
+      <div class="drivers">
+        <div class="drv"><span>21-day return</span><div><b class="up" style="width:38%"></b></div></div>
+        <div class="drv"><span>MACD histogram</span><div><b class="up" style="width:22%"></b></div></div>
+        <div class="drv"><span>Rolling volatility</span><div><b class="dn" style="width:30%"></b></div></div>
+        <div class="drv"><span>RSI</span><div><b class="up" style="width:11%"></b></div></div>
+        <div class="drv"><span>Average true range</span><div><b class="dn" style="width:15%"></b></div></div>
+      </div>
+      <div class="drv-key"><span class="note">Pulls the forecast down</span><span class="note">Pushes it up</span></div>
+      <figcaption class="note" style="margin-top:14px"><b>Illustrative schematic.</b> The input names are real model features; the bar lengths are made up.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="sec sec-rule" id="validation">
+  <div class="wrap split">
+    <div class="lead">
+      <h2>Tested on data the model never saw.</h2>
+      <p class="body">The model is trained on one stretch of history and judged on a later one. A 10-trading-day gap is cut out between them, and overlapping samples are removed, so nothing from the test period leaks back into training.</p>
+      <p class="body">The app's Validation page reports the error, how often the direction was right, how well the ranking held, and how often the real outcome landed inside the P10 to P90 range.</p>
+    </div>
+    <div>
+      <div class="tl" aria-hidden="true">
+        <div class="tr">Training period</div><div class="em"></div><div class="te">Held out</div>
+      </div>
+      <div class="tl-key"><span class="note">Purged of samples that overlap the test window</span><span class="note">10-day embargo, then the test</span></div>
+      <p class="note" id="valMeta" style="margin-top:14px" hidden></p>
+
+      <dl class="stats" id="stats" hidden></dl>
+
+      <p class="caution"><span id="valPending">Figures for the current model are published on the Validation page of the app. </span>These are backtest measurements on past data. They are not live performance and they do not predict or promise future returns.</p>
+      <div class="cta-row"><a class="btn btn-line" data-app href="https://fn.iimbg.com">Open the app to see validation</a></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec sec-rule" id="live">
+  <div class="wrap duo">
+    <div>
+      <h3>A plan for getting in, in stages.</h3>
+      <p class="body">The portfolio page lays out a staged schedule for building the positions instead of one large order. It is a plan for you to read and adapt. The product sends nothing to a broker.</p>
+    </div>
+    <div>
+      <h3>Live NSE prices, kept apart from the forecast.</h3>
+      <p class="body">Connect an Upstox or Zerodha market feed and live quotes appear as an overlay. The daily forecast is not quietly recalculated on every tick. If live price action weakens a BUY to a WATCH, the page tells you the change came from the live layer, and shows the feed's status and last tick.</p>
+    </div>
+  </div>
+</section>
+
+<section class="sec hood" id="hood">
+  <div class="wrap split">
+    <div class="lead">
+      <h2>Under the hood</h2>
+      <p class="body">For the examiners. Built for the course AI and ML for Digital Business Managers as a capstone, in Python end to end.</p>
+      <p class="stack">Streamlit interface, optional FastAPI service, LightGBM, SHAP and scikit-learn. A notebook trains the models and exports one artifact; the app reads it and refuses to produce recommendations if it is missing or malformed.<span id="hoodMeta"></span></p>
+    </div>
+    <ul class="pipe">
+      <li><b>Universe</b><span>Liquid NSE India equities<span data-m="universeSize" data-pre=", " data-post=" symbols in the current artifact"></span>, daily OHLCV plus fundamental ratios.</span></li>
+      <li><b>Features</b><span>RSI, MACD histogram, Bollinger bandwidth, ATR, stochastic %K, OBV change, Williams %R, 5-day and 21-day returns, rolling volatility and a fractionally differentiated close, followed by redundancy-aware feature selection<span data-m="featureCount" data-pre=" (" data-post=" features kept)"></span>.</span></li>
+      <li><b>Target</b><span>Forward return over 21 trading days.</span></li>
+      <li><b>Models</b><span>Three LightGBM regressors with quantile (pinball) loss at 0.10, 0.50 and 0.90. The P10 to P90 width is used as the uncertainty measure.</span></li>
+      <li><b>Validation</b><span>Purged, embargoed time-series split with a 10-day embargo<span data-m="cvFolds" data-pre=", " data-post=" folds"></span>. Reported: MAE, RMSE, directional accuracy, mean information coefficient, quantile coverage and realised return by signal.</span></li>
+      <li><b>Decision layer</b><span>Cross-sectional technical and fundamental scores, the forecast, and risk gates on volatility, drawdown and confidence, weighted by profile into four states.</span></li>
+      <li><b>Allocation</b><span>Hierarchical Risk Parity on the correlation structure, tilted by composite evidence, capped per position, rounded to whole shares, with explicit cash.</span></li>
+      <li><b>Explainability</b><span>Per-stock SHAP values from the serialized model.</span></li>
+      <li><b>Live overlay</b><span>Upstox Market Data Feed V3 or Zerodha Kite WebSocket adapters, with a labelled delayed fallback and a no-quote default.</span></li>
+    </ul>
+  </div>
+</section>
+
+<section class="sec limits" id="limits">
+  <div class="wrap split">
+    <div class="lead">
+      <h2>What this is not.</h2>
+      <p style="max-width:44ch">It is a research and education tool. Use it to study how evidence, uncertainty and sizing fit together, then make your own decisions.</p>
+      <div class="cta-row">
+        <a class="btn btn-solid" data-app href="https://fn.iimbg.com">Open the app</a>
+        <a class="btn btn-line" href="https://github.com/build-with-bala/ai-portfolio-advisor">Read the code on GitHub</a>
+      </div>
+    </div>
+    <ul class="nots">
+      <li><b>It places no trades.</b> There is no broker connection for orders. Nothing is bought or sold.</li>
+      <li><b>It is not a registered investment adviser.</b> Nothing here is personal investment advice.</li>
+      <li><b>It promises no returns.</b> A forecast is an estimate with a range, and the real outcome can fall outside it.</li>
+      <li><b>A backtest is not a track record.</b> Validation figures describe past data only.</li>
+      <li><b>It is a capstone, not a production system.</b> Real use would still need transaction costs and taxes, corporate-action handling, paper trading and an independent review.</li>
+    </ul>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <div>
+      <p>AI Portfolio Advisor is a course capstone for AI and ML for Digital Business Managers. It is a research and education tool. It places no trades, is not a registered investment adviser, and makes no promise of returns. Investing in securities carries risk, including loss of capital.</p>
+      <p>Charts on this page are illustrative schematics and do not show real stocks or results.</p>
+    </div>
+    <nav aria-label="Links">
+      <a data-app href="https://fn.iimbg.com">Open the app</a>
+      <a href="https://github.com/build-with-bala/ai-portfolio-advisor">GitHub repository</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+document.documentElement.classList.add('js');
+
+/* ------------------------------------------------------------------
+   EDIT HERE. Links and every model / performance number on the page.
+   A key left as null is hidden; its section still renders complete.
+   ------------------------------------------------------------------ */
+const APP_URL = 'https://fn.iimbg.com'; // target of every "Open the app" link
+
+const METRICS = {
+  // --- data and setup -------------------------------------------------
+  universeSize: 60,            // integer: number of NSE symbols in the exported artifact, e.g. 48
+  featureCount: 10,            // integer: features kept after redundancy-aware selection, e.g. 14
+  cvFolds: 5,                 // integer: number of purged/embargoed validation folds, e.g. 5 (leave null for a single split)
+  trainPeriod: '2018-02-19 to 2024-12-09',             // string: training date range, e.g. 'Jan 2018 to Dec 2023'
+  testPeriod: '2025-01-23 to 2026-09-09',              // string: held-out date range, e.g. 'Jan 2024 to Sep 2026'
+  artifactDate: '2026-10-08',            // string: date the model artifact was exported, e.g. '8 Oct 2026'
+
+  // --- held-out forecast quality (all on the held-out set) --------------
+  testDirectionalAccuracy: 0.5101, // fraction 0-1: share of held-out forecasts whose P50 sign matched the realised 21-day return, e.g. 0.54
+  informationCoefficient: 0.046,  // number -1..1: mean rank correlation between P50 forecast and realised return, e.g. 0.06
+  quantileCoverage: 0.824,        // fraction 0-1: share of realised returns that fell inside P10-P90 (nominal target 0.80), e.g. 0.78
+  testMAE: 0.0583,                 // fraction: mean absolute error of the P50 forecast in return units, e.g. 0.052 = 5.2 percentage points
+  testRMSE: 0.0771,                // fraction: root mean squared error of the P50 forecast in return units, e.g. 0.071
+
+  // --- backtest ---------------------------------------------------------
+  backtestExcessReturn: -0.0636,    // fraction: annualised backtest return minus the benchmark's, e.g. 0.031 (may be negative)
+  backtestBenchmark: 'all 60 stocks, equal weight, after costs',       // string: what the excess is measured against, e.g. 'equal-weight universe'
+  backtestPeriod: '2025-01-23 to 2026-09-09'           // string: backtest date range, e.g. 'Jan 2024 to Sep 2026'
+};
+/* ------------------------------------------------------------------ */
+
+(function () {
+  const has = v => v !== null && v !== undefined && v !== '' && !(typeof v === 'number' && !isFinite(v));
+  const pct = (v, d) => (v * 100).toFixed(d) + '%';
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  document.querySelectorAll('[data-app]').forEach(a => { a.href = APP_URL; });
+
+  /* ---------- metrics ---------- */
+  document.querySelectorAll('[data-m]').forEach(el => {
+    const v = METRICS[el.dataset.m];
+    el.textContent = has(v) ? (el.dataset.pre || '') + v + (el.dataset.post || '') : '';
+  });
+  const STATS = [
+    ['testDirectionalAccuracy', 'Direction called correctly', v => pct(v, 1), 'Held-out set. Half would be a coin toss.'],
+    ['informationCoefficient', 'Information coefficient', v => (v > 0 ? '+' : '') + v.toFixed(3), 'Mean rank correlation of forecast and outcome.'],
+    ['quantileCoverage', 'Outcomes inside P10 to P90', v => pct(v, 1), 'A well-calibrated range would hold 80%.'],
+    ['testMAE', 'Mean absolute error', v => (v * 100).toFixed(2) + ' pts', 'Percentage points of 21-day return.'],
+    ['testRMSE', 'Root mean squared error', v => (v * 100).toFixed(2) + ' pts', 'Percentage points of 21-day return.'],
+    ['backtestExcessReturn', 'Backtest excess return', v => (v > 0 ? '+' : '') + pct(v, 1),
+      () => ['Annualised, backtest only' + (has(METRICS.backtestBenchmark) ? ', against ' + METRICS.backtestBenchmark : ''),
+             has(METRICS.backtestPeriod) ? METRICS.backtestPeriod : '', 'Not a return anyone earned.'].filter(Boolean).join('. ').replace(/\.\./g, '.')]
+  ];
+  const statsEl = document.getElementById('stats');
+  let shown = 0;
+  STATS.forEach(([key, label, fmt, sub]) => {
+    const v = METRICS[key];
+    if (!has(v) || typeof v !== 'number') return;
+    const d = document.createElement('div');
+    d.className = 'stat';
+    const dt = document.createElement('dt'); dt.textContent = label;
+    const dd = document.createElement('dd'); dd.textContent = fmt(v);
+    const sm = document.createElement('small'); sm.textContent = typeof sub === 'function' ? sub() : sub;
+    dd.appendChild(sm); d.append(dt, dd); statsEl.appendChild(d); shown++;
+  });
+  if (shown) { statsEl.hidden = false; document.getElementById('valPending').hidden = true; }
+  const meta = [
+    has(METRICS.trainPeriod) ? 'Trained on ' + METRICS.trainPeriod : '',
+    has(METRICS.testPeriod) ? 'held out ' + METRICS.testPeriod : '',
+    has(METRICS.cvFolds) ? METRICS.cvFolds + ' validation folds' : ''
+  ].filter(Boolean).join(', ');
+  if (meta) { const m = document.getElementById('valMeta'); m.textContent = meta.charAt(0).toUpperCase() + meta.slice(1) + '.'; m.hidden = false; }
+  if (has(METRICS.artifactDate)) document.getElementById('hoodMeta').textContent = ' Current artifact exported ' + METRICS.artifactDate + '.';
+
+  /* ---------- hero fan (schematic, generated from a fixed seed) ---------- */
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (n, a) => { const e = document.createElementNS(NS, n); for (const k in a) e.setAttribute(k, a[k]); return e; };
+  const stage = document.getElementById('fanStage'), fan = document.getElementById('fan'), read = document.getElementById('fanRead');
+  const readDefault = read.textContent;
+  let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const walk = [0]; for (let i = 1; i < 64; i++) walk.push(walk[i - 1] + (rnd() - 0.5));
+  const wMin = Math.min(...walk), wMax = Math.max(...walk);
+  let bars = [], geo = null, lastW = 0;
+
+  function drawFan() {
+    const W = stage.clientWidth, H = stage.clientHeight;
+    if (!W || W === lastW) return; lastW = W;
+    const small = W < 700;
+    const padR = small ? 20 : Math.max(170, (W - 1320) / 2 + 150);
+    const padL = small ? 0 : Math.max(0, (W - 1320) / 2);
+    const xT = padL + (W - padL - padR) * (small ? 0.3 : 0.4);
+    const yT = H * 0.52, step = (W - padR - xT) / 21.5;
+    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, 'aria-hidden': 'true' });
+    // history
+    const amp = H * 0.3, endV = walk[walk.length - 1];
+    const pts = walk.map((v, i) => {
+      const x = (xT * i) / (walk.length - 1);
+      const y = yT - ((v - endV) / (wMax - wMin)) * amp;
+      return [x, Math.max(14, Math.min(H - 14, y))];
+    });
+    svg.appendChild(el('path', { class: 'hist', pathLength: 1, d: 'M' + pts.map(p => p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join('L') }));
+    svg.appendChild(el('line', { class: 'today', x1: xT, x2: xT, y1: 8, y2: H - 8 }));
+    // 21 daily bars
+    bars = []; const bw = Math.max(4, step * 0.58);
+    for (let d = 1; d <= 21; d++) {
+      const s = Math.sqrt(d / 21), up = H * 0.42 * s, dn = H * 0.38 * s, x = xT + d * step;
+      const r = el('rect', { class: 'bar', x: x - bw / 2, y: yT - up, width: bw, height: up + dn, rx: Math.min(3, bw / 2) });
+      r.style.opacity = (0.95 - 0.5 * (d / 21)).toFixed(2);
+      r.style.transformOrigin = `50% ${(up / (up + dn) * 100).toFixed(1)}%`;
+      r.style.animationDelay = (1.1 + d * 0.035).toFixed(2) + 's';
+      svg.appendChild(r); bars.push(r);
+    }
+    svg.appendChild(el('line', { class: 'med', x1: xT, x2: xT + 21 * step + bw, y1: yT, y2: yT }));
+    svg.appendChild(el('circle', { class: 'dot', cx: xT, cy: yT, r: 5 }));
+    // labels
+    const g = el('g', { class: 'lab' });
+    const t = (x, y, s, c, anchor) => { const e = el('text', { x, y, class: c || '', 'text-anchor': anchor || 'start' }); e.textContent = s; g.appendChild(e); };
+    t(xT - 10, H - 12, 'Today', 'strong', 'end');
+    const xE = xT + 21 * step + bw / 2;
+    if (small) {
+      t(xE, 14, 'Optimistic, P90', 'strong', 'end');
+      t(xT + 12, yT - 10, 'Median, P50', 'strong');
+      t(xE, H - 4, 'Pessimistic, P10', 'strong', 'end');
+    } else {
+      const lx = xE + 18;
+      t(lx, yT - H * 0.42 + 14, 'Optimistic', 'strong'); t(lx, yT - H * 0.42 + 32, 'P90');
+      t(lx, yT - 2, 'Median', 'strong'); t(lx, yT + 16, 'P50');
+      t(lx, yT + H * 0.38 - 20, 'Pessimistic', 'strong'); t(lx, yT + H * 0.38 - 2, 'P10');
+      t(xT + step, H - 12, '21 trading days ahead');
+    }
+    svg.appendChild(g);
+    stage.replaceChildren(svg);
+    geo = { xT, step };
+  }
+  drawFan();
+  setTimeout(() => fan.classList.remove('anim'), reduced ? 0 : 3200);
+  let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { fan.classList.remove('anim'); drawFan(); }, 120); });
+  function pick(clientX) {
+    if (!geo) return;
+    const x = clientX - stage.getBoundingClientRect().left;
+    const d = Math.round((x - geo.xT) / geo.step);
+    bars.forEach((b, i) => b.classList.toggle('on', i + 1 === d));
+    read.textContent = d >= 1 && d <= 21
+      ? `Trading day ${d} of 21. ${d <= 5 ? 'Close in, the three cases sit near each other.' : d <= 14 ? 'The cases are pulling apart.' : 'This far out, the honest answer is a wide range.'}`
+      : readDefault;
+  }
+  stage.addEventListener('pointermove', e => pick(e.clientX));
+  stage.addEventListener('pointerleave', () => { bars.forEach(b => b.classList.remove('on')); read.textContent = readDefault; });
+
+  /* ---------- the book (schematic) ---------- */
+  // t/f/m/p = pillar scores out of 100; r = [P10, P50, P90] on a -1..1 schematic scale
+  const STOCKS = [
+    { k: 'A', t: 78, f: 62, m: 74, p: 66, r: [-.25, .2, .6] },
+    { k: 'B', t: 52, f: 84, m: 58, p: 80, r: [-.15, .1, .35] },
+    { k: 'C', t: 86, f: 38, m: 80, p: 48, r: [-.6, .3, .95] },
+    { k: 'D', t: 60, f: 70, m: 52, p: 72, r: [-.2, .08, .4] },
+    { k: 'E', t: 44, f: 56, m: 40, p: 60, r: [-.35, -.05, .3] },
+    { k: 'F', t: 70, f: 48, m: 66, p: 36, r: [-.55, .15, .7] }
+  ];
+  const PROFILES = {
+    conservative: { w: [.15, .40, .20, .25], th: [72, 63, 53], maxWidth: .9, cap: .30, why: 'leans on fundamentals, tight limits' },
+    moderate:     { w: [.25, .25, .25, .25], th: [69, 58, 52], maxWidth: 1.3, cap: .36, why: 'weighs the four pillars evenly' },
+    aggressive:   { w: [.35, .10, .40, .15], th: [70, 58, 48], maxWidth: 2, cap: .44, why: 'leans on momentum and the forecast' }
+  };
+  const LABEL = ['PASS', 'WATCH', 'BUY', 'STRONG BUY'];
+  const bookEl = document.getElementById('bookRows');
+  const rowEls = {};
+  STOCKS.forEach(s => {
+    const row = document.createElement('div'); row.className = 'row';
+    const bar = (lab, v) => `<span class="pill"><i>${lab}</i><span class="track"><b style="width:${v}%"></b></span></span>`;
+    const L = (s.r[0] + 1) * 50, R = (s.r[2] + 1) * 50, M = (s.r[1] + 1) * 50;
+    row.innerHTML = `<span class="name">Stock ${s.k}</span>${bar('Technical', s.t)}${bar('Fundamental', s.f)}${bar('Forecast', s.m)}${bar('Fit', s.p)}` +
+      `<span class="rng"><b style="left:${L}%;width:${R - L}%"></b><u style="left:${M}%"></u></span>` +
+      `<span class="verdict"><span class="state"></span><span class="why"></span></span>`;
+    bookEl.appendChild(row); rowEls[s.k] = row;
+  });
+
+  function evaluate(name) {
+    const P = PROFILES[name];
+    return STOCKS.map(s => {
+      const c = s.t * P.w[0] + s.f * P.w[1] + s.m * P.w[2] + s.p * P.w[3];
+      const width = s.r[2] - s.r[0];
+      let st = c >= P.th[0] ? 3 : c >= P.th[1] ? 2 : c >= P.th[2] ? 1 : 0;
+      let why = ['Not enough evidence for this profile', 'Evidence is mixed', 'Clears every limit', 'The pillars agree'][st];
+      if (st >= 2 && width > P.maxWidth) { st = 1; why = 'Range too wide for this profile'; }
+      return { s, c, st, why, width };
+    }).sort((a, b) => b.st - a.st || b.c - a.c);
+  }
+
+  const cols = document.getElementById('cols'), capline = document.getElementById('capline'), allocRead = document.getElementById('allocRead');
+  let allocSeen = false, current = 'moderate';
+  function renderAlloc(res, P) {
+    const SCALE = 0.5; // column area height represents this share of capital
+    const picks = res.filter(r => r.st >= 2);
+    let raw = picks.map(r => (1 / r.width) * (r.c / 60)); const sum = raw.reduce((a, b) => a + b, 0) || 1;
+    const w = {}; let invested = 0, capped = 0;
+    picks.forEach((r, i) => {
+      let x = raw[i] / sum; const hit = x > P.cap; if (hit) { x = P.cap; capped++; }
+      x = Math.max(0, x - 0.012 - 0.004 * i); // whole-share rounding leaves a little behind
+      w[r.s.k] = { x, hit }; invested += x;
+    });
+    const cash = Math.max(0, 1 - invested);
+    cols.querySelectorAll('.col').forEach(c => {
+      const k = c.dataset.k, v = k === 'cash' ? { x: cash, hit: false } : w[k];
+      c.classList.toggle('capped', !!(v && v.hit));
+      c.firstElementChild.style.height = (allocSeen && v ? Math.min(100, (v.x / SCALE) * 100) : 0) + '%';
+    });
+    document.querySelectorAll('.leaf[data-k]').forEach(l => l.classList.toggle('off', !w[l.dataset.k]));
+    capline.style.top = (P.cap / SCALE) * 100 + '%';
+    allocRead.textContent = `${picks.length} position${picks.length === 1 ? '' : 's'} sized` + (capped ? `, ${capped} held at the cap` : '') + ', the rest stays in cash.';
+  }
+  function render(name) {
+    current = name; const P = PROFILES[name], res = evaluate(name);
+    res.forEach((r, i) => {
+      const row = rowEls[r.s.k]; row.style.order = i + 1; row.classList.toggle('dim', r.st === 0);
+      const st = row.querySelector('.state'); st.className = 'state s' + r.st; st.textContent = LABEL[r.st];
+      row.querySelector('.why').textContent = r.why;
+    });
+    document.querySelectorAll('#seg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.p === name)));
+    renderAlloc(res, P);
+  }
+  bookEl.style.display = 'flex'; bookEl.style.flexDirection = 'column';
+  document.getElementById('seg').addEventListener('click', e => { const b = e.target.closest('button'); if (b) render(b.dataset.p); });
+  render(current);
+  const showAlloc = () => { allocSeen = true; render(current); };
+  if ('IntersectionObserver' in window && !reduced) {
+    const io = new IntersectionObserver(es => { if (es.some(x => x.isIntersecting)) { showAlloc(); io.disconnect(); } }, { threshold: 0.35 });
+    io.observe(cols);
+  } else showAlloc();
+})();
+</script>
+</body>
+</html>

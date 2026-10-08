@@ -1,5 +1,26 @@
 # AI Portfolio Advisor
 
+**Live app:** https://fn.iimbg.com · **Report:** [docs/REPORT.md](docs/REPORT.md) ([Word](docs/Capstone_Report.docx)) · **Deck:** [docs/Capstone_Deck.pptx](docs/Capstone_Deck.pptx) · **Vibe Coding Log:** [docs/VIBE_CODING_LOG.md](docs/VIBE_CODING_LOG.md) · **Landing page:** [landing/index.html](landing/index.html)
+
+## Reproduce in three commands
+
+```bash
+pip install -r requirements.txt
+python -m src.model          # tune, cross-validate, train, evaluate, export (about a minute)
+streamlit run app.py
+```
+
+| File | Role |
+|---|---|
+| `src/data.py` | Prices, features, feature selection, purged time-series splits |
+| `src/model.py` | Hyperparameter search, walk-forward CV, quantile models, hold-out test, SHAP, backtest |
+| `app.py` | Streamlit product (includes a Model report tab) |
+| `src/portfolio_advisor/` | Decision engine and live-quote adapters shared by the app and API |
+| `reports/metrics.json` | Every number quoted in the report and deck |
+| `data/snapshot/` | Committed price snapshot, so training is reproducible offline |
+| `tests/` | 17 tests, including leakage checks on the splits |
+
+
 A Python-only research product that turns the outputs of the accompanying
 Colab model into profile-aware portfolio decisions. The product combines
 technical evidence, fundamental evidence, quantile forecasts, uncertainty,
@@ -30,7 +51,7 @@ an explicit data-quality boundary.
 ## Repository layout
 
 ```text
-streamlit_app.py                 Python frontend
+app.py                 Python frontend
 api_app.py                       Optional FastAPI service
 src/portfolio_advisor/core.py    Shared analysis and allocation engine
 notebooks/Financial_Analysis.ipynb  Steps 0–18 preserved, production handoff after 18
@@ -66,7 +87,7 @@ source .venv/bin/activate
 pip install -e '.[dev]'
 
 # after copying data/artifacts.pkl
-streamlit run streamlit_app.py
+streamlit run app.py
 uvicorn api_app:app --host 0.0.0.0 --port 8000
 ```
 

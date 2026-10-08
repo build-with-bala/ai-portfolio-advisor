@@ -830,7 +830,7 @@ def data_quality_report(bundle: Mapping[str, Any], asof: Any | None = None) -> d
         "fundamental_point_in_time": False,
         "missing_feature_rates": missing,
         "notes": [
-            "Fundamentals are a current snapshot broadcast across historical rows in the original notebook.",
+            "Fundamentals are today's snapshot and feed only the fundamental score, not the forecast model.",
             "Recommendations are research outputs, not personalized financial advice or an order instruction.",
         ],
     }

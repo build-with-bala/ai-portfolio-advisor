@@ -13,5 +13,5 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e '.[dev]'
-      - run: python -m compileall -q src streamlit_app.py api_app.py
+      - run: python -m compileall -q src app.py api_app.py
       - run: pytest -q

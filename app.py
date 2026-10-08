@@ -691,7 +691,7 @@ def render_method(bundle: dict, snapshot: dict) -> None:
             ("As-of", quality.get("asof")),
         ]:
             st.write(f"**{label}:** {value if value is not None else '—'}")
-        st.warning("Fundamentals are not point-in-time in the supplied notebook artifact. Treat historical performance as optimistic until that is corrected.")
+        st.info("Fundamental ratios are today's snapshot. They feed only the fundamental score; the forecast model does not use them.")
     if quality.get("missing_feature_rates"):
         st.markdown("### Highest missing-feature rates")
         missing = pd.DataFrame({"Feature": list(quality["missing_feature_rates"]), "Missing rate": list(quality["missing_feature_rates"].values())})
@@ -755,6 +755,95 @@ def render_floating_chat(snapshot: dict) -> None:
     fab.float(float_css_helper(right="1.5rem", bottom="1.5rem", css="z-index:9999;"))
 
 
+def render_model_report(bundle: dict) -> None:
+    """Tuning, cross-validation, hold-out accuracy, SHAP and error analysis."""
+    report = bundle.get("report")
+    if not report:
+        st.info("This artifact was built before the model report existed. Rebuild it with `python -m src.model`.")
+        return
+    d, sel, hold = report["data"], report["selected"], report["holdout"]
+    st.markdown("### How the forecast model was built and checked")
+    st.caption(
+        f"{d['tickers']} NSE stocks across {d['sectors']} sectors · {d['first_date']} to {d['last_date']} · "
+        f"{d['development_rows']:,} rows for development, {d['holdout_rows_scored']:,} held-out rows from {d['holdout_start']}"
+    )
+    st.graphviz_chart("""
+        digraph { rankdir=LR; node [shape=box, style=rounded, fontname=Helvetica, fontsize=11];
+          a [label="Prices\n(src/data.py)"]; b [label="19 candidate\nfeatures"]; c [label="Feature selection\n(mutual information)"];
+          d [label="Purged walk-forward CV\n5 folds x 25 settings"]; e [label="3 LightGBM quantile\nmodels (P10/P50/P90)"];
+          f [label="Hold-out test\n+ SHAP + backtest"]; g [label="artifacts.pkl"]; h [label="app.py\nprofile -> ranked book"];
+          a -> b -> c -> d -> e -> f -> g -> h; }
+    """)
+
+    st.markdown("#### Cross-validation: candidates on the same five folds")
+    cand = pd.DataFrame(report["candidates"])
+    table = pd.DataFrame({
+        "Model": cand["model"],
+        "Pinball loss (lower is better)": [("n/a" if pd.isna(m) else f"{m:.5f} ± {s:.5f}") for m, s in zip(cand["pinball_mean"], cand["pinball_std"])],
+        "MAE": [f"{m:.4f} ± {s:.4f}" for m, s in zip(cand["mae_mean"], cand["mae_std"])],
+        "Rank IC": [f"{m:+.4f} ± {s:.4f}" for m, s in zip(cand["ic_mean"], cand["ic_std"])],
+        "P10-P90 coverage": [fmt_pct(v) for v in cand["coverage_mean"]],
+        "Settings": cand["settings"],
+    })
+    st.dataframe(table, use_container_width=True, hide_index=True)
+    st.write(
+        f"Tuning cut pinball loss by **{sel['pinball_improvement_vs_notebook']:.1%}** versus the original notebook settings. "
+        f"Against the naive no-feature baseline the tuned model is **{abs(sel['pinball_improvement_vs_naive']):.1%} "
+        f"{'better' if sel['pinball_improvement_vs_naive'] > 0 else 'worse'}** in cross-validation: "
+        "21-day returns are mostly noise, and the search chose small, heavily constrained trees for that reason."
+    )
+    with st.expander(f"All {report['validation']['lightgbm_trials']} hyperparameter trials ({report['validation']['lightgbm_fits']} model fits)"):
+        st.dataframe(pd.DataFrame(report["trials"]), use_container_width=True, hide_index=True)
+    with st.expander("Fold dates"):
+        st.dataframe(pd.DataFrame(report["validation"]["folds"]), use_container_width=True, hide_index=True)
+
+    st.markdown("#### Hold-out test (never used for tuning)")
+    rows = []
+    for name, key in [("LightGBM quantile, tuned", "lightgbm"), ("Ridge (scaled features)", "ridge"), ("Naive (historical quantiles)", "naive")]:
+        h = hold[key]
+        rows.append({"Model": name, "Pinball loss": h.get("pinball"), "MAE": h["mae"], "RMSE": h["rmse"], "Rank IC": h["ic_mean"],
+                     "Direction right": h["directional_accuracy"], "P10-P90 coverage": h.get("coverage")})
+    st.dataframe(pd.DataFrame(rows).round(4), use_container_width=True, hide_index=True)
+    st.caption(f"Coverage target is {hold['target_coverage']:.0%}: that share of real outcomes should land inside the P10-P90 band.")
+
+    bt = report["backtest"]
+    st.markdown("#### Backtest: does picking the top forecasts pay?")
+    st.caption(bt["rule"])
+    rows = []
+    for label, key in [("Hold-out period", "holdout"), ("Cross-validation folds", "cross_validation_folds")]:
+        b = bt[key]
+        rows.append({"Period": label, "Strategy return / yr": fmt_pct(b["strategy_annual_return_median"]),
+                     "Benchmark return / yr": fmt_pct(b["benchmark_annual_return_median"]),
+                     "Excess / yr (median)": fmt_pct(b["annual_excess_median"]),
+                     "Excess range over start days": f"{fmt_pct(b['annual_excess_min'])} to {fmt_pct(b['annual_excess_max'])}",
+                     "Start days beating benchmark": fmt_pct(b["share_of_runs_beating_benchmark"], 0)})
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    st.warning("The backtest does not show a reliable return advantage over holding every stock equally. "
+               "The model's proven strength is the calibrated risk range, not stock picking.")
+
+    left, right = st.columns(2)
+    with left:
+        st.markdown("#### What drives the forecasts (SHAP)")
+        imp = pd.DataFrame(report["shap"]).iloc[::-1]
+        fig = go.Figure(go.Bar(x=imp["mean_abs_shap"], y=imp["feature"], orientation="h", marker_color="#2a78d6"))
+        fig.update_layout(xaxis_title="Mean |SHAP| on the median forecast")
+        st.plotly_chart(chart_layout(fig, 340), use_container_width=True)
+    with right:
+        st.markdown("#### Feature selection")
+        st.dataframe(pd.DataFrame(report["feature_selection"]["table"]), use_container_width=True, hide_index=True, height=340)
+
+    st.markdown("#### Where the model is weaker")
+    for key, title in [("volatility_regime", "By market volatility"), ("market_direction", "By market direction"), ("sector", "By sector")]:
+        part = pd.DataFrame(report["error_analysis"][key])[["group", "rows", "mae", "ic_mean", "coverage", "directional_accuracy"]]
+        st.markdown(f"**{title}**")
+        st.dataframe(part.round(4), use_container_width=True, hide_index=True)
+
+    st.markdown("#### Leakage controls and limits")
+    for line in report["preprocessing"]["leakage_controls"] + report["limits"]:
+        st.markdown(f"- {line}")
+    st.caption(report["preprocessing"]["scaling"])
+
+
 def main() -> None:
     inject_css()
     artifact_path = os.getenv("ARTIFACTS_PATH", str(Path(__file__).resolve().parent / "data" / "artifacts.pkl"))
@@ -766,10 +855,8 @@ def main() -> None:
         st.markdown("""
         **Run this setup path:**
 
-        1. Run the original notebook through Step 18 in Colab.
-        2. Run the new exporter cell after Step 18.
-        3. Download or copy `artifacts.pkl` into this project's `data/` folder.
-        4. Restart Streamlit.
+        1. Run `python -m src.model` to train from the committed data snapshot.
+        2. Restart Streamlit.
         """)
         return
     profile = sidebar_profile(bundle)
@@ -781,8 +868,8 @@ def main() -> None:
     render_header(snapshot)
     render_metrics(snapshot)
     render_insights(snapshot)
-    tab_overview, tab_research, tab_portfolio, tab_validation, tab_live, tab_method = st.tabs([
-        "Overview", "Stock research", "Portfolio lab", "Validation", "India live", "Method & data"
+    tab_overview, tab_research, tab_portfolio, tab_validation, tab_report, tab_live, tab_method = st.tabs([
+        "Overview", "Stock research", "Portfolio lab", "Validation", "Model report", "India live", "Method & data"
     ])
     with tab_overview:
         render_recommendations(snapshot)
@@ -793,6 +880,8 @@ def main() -> None:
         render_portfolio_lab(snapshot)
     with tab_validation:
         render_validation(bundle)
+    with tab_report:
+        render_model_report(bundle)
     with tab_live:
         render_live(bundle, artifact_path, profile)
     with tab_method:
