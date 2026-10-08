@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Portfolio Advisor: capstone deck</title>
+<meta name="description" content="Capstone presentation for AI Portfolio Advisor: NSE stock recommendations with a pessimistic, median and optimistic 21-day forecast.">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="deck.css">
+<script>
+/* Tiny and independent of the deck engine: keeps the slides scaled even if deck.js never runs. */
+(function(){function f(){var d=document.documentElement,w=d.clientWidth||window.innerWidth,h=window.innerHeight;
+d.style.setProperty('--sw',w/1920);d.style.setProperty('--s',Math.min(w/1920,h/1080));}
+f();window.addEventListener('resize',f);})();
+</script>
+</head>
+<body>
+<div id="deck">
+<div id="stage">
+
+<!-- 1 -->
+<section class="slide s-title" data-section="Executive pitch" data-title="A forecast is a range."
+  data-notes="AI Portfolio Advisor: profile-aware NSE stock recommendations with a pessimistic, median and optimistic (P10, P50, P90) 21-trading-day forecast from three LightGBM quantile models, for 60 NSE stocks. Agenda: 5-minute executive pitch, 10-minute technical deep dive, live demo. Group 5: B Gokul Vaigundh (DBM/1015/03), Balaji G (DBM/1016/03), Shashaanth NC (DBM/1070/03).">
+  <div class="fan" data-chart="fan" data-f="0" data-fx="group"></div>
+  <p class="course" data-f="0">Applied AI and Machine Learning Capstone<br>AI and ML for Digital Business Managers</p>
+  <div class="title-block">
+    <p class="product" data-f="0">AI Portfolio Advisor</p>
+    <h1 data-f="0">A forecast<br>is a range.</h1>
+    <p class="lead" data-f="1">A stock tip is one number. What happens next is a range. We forecast that range for 60 NSE stocks, 21 trading days ahead.</p>
+  </div>
+  <ol class="roadmap" data-f="2" data-fx="group">
+    <li class="rv" style="--d:0ms"><b>5 min</b><span>Executive pitch</span></li>
+    <li class="rv" style="--d:120ms"><b>10 min</b><span>Technical deep dive</span></li>
+    <li class="rv" style="--d:240ms"><b>Live</b><span>Demo</span></li>
+  </ol>
+  <p class="team" data-f="2"><b>Group 5</b><br>B Gokul Vaigundh · DBM/1015/03<br>Balaji G · DBM/1016/03<br>Shashaanth NC · DBM/1070/03</p>
+</section>
+
+<!-- 2 -->
+<section class="slide" data-focus data-section="Executive pitch" data-title="Advisers get a tip. They need the range, the reason and the size."
+  data-notes="Target user: an independent wealth adviser or self-directed investor in India who reviews a portfolio monthly. Today picks come from tips and single-number targets with no view of the range of outcomes or fit with risk tolerance. The product takes a risk profile and capital, blends four evidence pillars (technical score, fundamental score, model forecast, risk fit) by profile weights, and returns a ranked book marked STRONG BUY / BUY / WATCH / PASS with a P10/P50/P90 21-day return, a position size from Hierarchical Risk Parity and SHAP drivers per stock.">
+  <header class="head">
+    <p class="tag">Executive pitch</p>
+    <h2>Advisers get a tip. They need the range, the reason and the size.</h2>
+  </header>
+  <div class="body g-2">
+    <div class="panel persona" data-f="1">
+      <h3>Who it is for</h3>
+      <p class="big">An independent wealth adviser or self-directed investor in India who reviews a portfolio every month.</p>
+      <h3 class="gap">What they have today</h3>
+      <ul class="plain">
+        <li>Tips and single-number targets</li>
+        <li>No view of the range of outcomes</li>
+        <li>No link to the client's risk tolerance</li>
+      </ul>
+    </div>
+    <div class="flow">
+      <div class="flow-col in" data-f="2">
+        <h3>Adviser enters</h3>
+        <span class="node">Risk profile</span>
+        <span class="node">Capital</span>
+      </div>
+      <div class="flow-arrow" data-f="3" data-until="3" aria-hidden="true"><i></i></div>
+      <div class="flow-col pillars" data-f="3">
+        <h3>Four evidence pillars</h3>
+        <span class="node">Technical score</span>
+        <span class="node">Fundamental score</span>
+        <span class="node band">Model forecast</span>
+        <span class="node">Risk fit</span>
+        <p class="small">Weighted by the client's profile</p>
+      </div>
+      <div class="flow-arrow" data-f="4" aria-hidden="true"><i></i></div>
+      <div class="flow-col out" data-f="4" data-fx="group">
+        <h3 class="rv">For every stock, the adviser gets</h3>
+        <div class="out-row rv" style="--d:80ms"><b>Signal</b><span class="signals"><em>STRONG BUY</em><em>BUY</em><em>WATCH</em><em>PASS</em></span></div>
+        <div class="out-row rv" style="--d:200ms"><b>Range</b><span><span class="glyph" aria-hidden="true"><i></i></span>Pessimistic, median and optimistic 21-day return</span></div>
+        <div class="out-row rv" style="--d:320ms"><b>Size</b><span>Hierarchical Risk Parity, a position cap, whole shares</span></div>
+        <div class="out-row rv" style="--d:440ms"><b>Reason</b><span>SHAP drivers for that stock</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 3 -->
+<section class="slide" data-focus data-section="Executive pitch" data-title="467 adviser hours back each year: a 483% return on cost."
+  data-notes="ROI is an adviser time-saving case built on stated assumptions: 200 clients x 4 reviews a year = 800 reviews; screening time cut from 45 to 10 minutes saves 35 minutes each = 467 hours a year; at Rs 1,500 per adviser hour that is Rs 7.0 lakh (Rs 700,000); against an assumed running cost of Rs 1.2 lakh a year the return on cost is 483%. Market strategy: free research tool for self-directed investors; paid seat for advisers who need client-ready evidence sheets; brokers as a channel through the existing Upstox / Zerodha live-quote adapters. Not claimed: extra return. Hold-out top-5 strategy returned -4.4% a year against +3.3% for holding all stocks equally.">
+  <header class="head">
+    <p class="tag">Executive pitch</p>
+    <h2>467 adviser hours back each year: a 483% return on cost.</h2>
+  </header>
+  <div class="body g-roi">
+    <div class="ledger">
+      <div class="ledger-head"><span><i class="assume-key"></i>Stated assumption</span><span>What follows</span></div>
+      <div class="ledger-row" data-f="1" data-fx="group" data-until="4">
+        <div class="inputs rv"><span class="assume">200 clients</span><span class="op">×</span><span class="assume">4 reviews a year</span></div>
+        <div class="result rv" style="--d:260ms"><b data-count="800">800</b><span>reviews a year</span></div>
+      </div>
+      <div class="ledger-row" data-f="2" data-fx="group" data-until="4">
+        <div class="inputs rv"><span class="op">×</span><span class="assume">45 down to 10 minutes each</span></div>
+        <div class="result rv" style="--d:260ms"><b data-count="467">467</b><span>adviser hours saved</span></div>
+      </div>
+      <div class="ledger-row" data-f="3" data-fx="group" data-until="4">
+        <div class="inputs rv"><span class="op">×</span><span class="assume">Rs 1,500 an adviser hour</span></div>
+        <div class="result rv" style="--d:260ms"><b>Rs <span data-count="7.0" data-dec="1">7.0</span> lakh</b><span>of adviser time a year</span></div>
+      </div>
+      <div class="ledger-row total" data-f="4" data-fx="group">
+        <div class="inputs rv"><span class="op">against</span><span class="assume">Rs 1.2 lakh running cost a year</span></div>
+        <div class="result rv" style="--d:260ms"><b class="hl"><span data-count="483">483</span>%</b><span>return on cost</span></div>
+      </div>
+    </div>
+    <div class="side">
+      <div class="panel" data-f="5" data-fx="group">
+        <h3 class="rv">Route to market</h3>
+        <div class="tier rv" style="--d:100ms"><b>Free</b><span>Research tool for self-directed investors</span></div>
+        <div class="tier rv" style="--d:220ms"><b>Paid seat</b><span>Advisers who need client-ready evidence sheets</span></div>
+        <div class="tier rv" style="--d:340ms"><b>Channel</b><span>Brokers, through the Upstox and Zerodha quote adapters already built</span></div>
+      </div>
+      <div class="callout" data-f="6">
+        <h3>Not claimed: extra return</h3>
+        <p>On unseen data the top-5 picks returned −4.4% a year against +3.3% for holding every stock. We sell speed, discipline and honest ranges.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 4 -->
+<section class="slide" data-focus data-section="Technical deep dive" data-title="From raw prices to the app, with leakage designed out."
+  data-notes="Architecture: prices -> features -> selection -> purged walk-forward CV -> quantile models -> artifact -> app. src/data.py downloads Yahoo Finance prices, builds 19 candidate features, selects features and defines the splits. src/model.py tunes, cross-validates, trains three LightGBM quantile models, evaluates the hold-out, computes SHAP, backtests and exports data/artifacts.pkl and reports/metrics.json. app.py is the Streamlit interface; src/portfolio_advisor/core.py is the decision engine. Data: 60 liquid NSE large caps, five per sector across 12 sectors, daily adjusted prices 2018-02-19 to 2026-10-08, 118,641 stock-days; label = return over the next 21 trading days. Feature selection: greedy mutual-information relevance minus 0.5 x redundancy on development data only; kept 10 of 19: mkt_vol_21, fracdiff_close, rel_ret_21, volume_surge, mom_126_21, Stoch_K, vol_63, ret_63, OBV_delta, Boll_BW. Company fundamentals were removed from the model because only today's ratios exist, so using them on past dates would leak future information.">
+  <header class="head">
+    <p class="tag">Technical deep dive</p>
+    <h2>From raw prices to the app, with leakage designed out.</h2>
+  </header>
+  <div class="body g-arch">
+    <div class="rail r7" data-f="1" data-fx="group" data-until="1">
+      <div class="rail-line gx" style="--d:100ms"></div>
+      <div class="rail-pulses" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <ol class="stations">
+        <li class="rv" style="--d:0ms"><b>Prices</b><i></i><span>Yahoo Finance, daily</span></li>
+        <li class="rv" style="--d:140ms"><b>Features</b><i></i><span>19 candidates</span></li>
+        <li class="rv" style="--d:280ms"><b>Selection</b><i></i><span>10 kept</span></li>
+        <li class="rv" style="--d:420ms"><b>Walk-forward CV</b><i></i><span>5 folds, purged</span></li>
+        <li class="rv" style="--d:560ms"><b>Quantile models</b><i></i><span>P10, P50, P90</span></li>
+        <li class="rv" style="--d:700ms"><b>Artifact</b><i></i><span>artifacts.pkl</span></li>
+        <li class="rv" style="--d:840ms"><b>App</b><i></i><span>Streamlit, FastAPI</span></li>
+      </ol>
+      <div class="files">
+        <code class="rv" style="grid-column:1/4;--d:1000ms">src/data.py</code>
+        <code class="rv" style="grid-column:4/7;--d:1120ms">src/model.py</code>
+        <code class="rv" style="grid-column:7/8;--d:1240ms">app.py</code>
+      </div>
+    </div>
+    <div class="panel data-panel" data-f="2" data-fx="group">
+      <h3 class="rv">Data</h3>
+      <div class="stat rv" style="--d:80ms"><b data-count="60">60</b><span>liquid NSE large caps, five in each of 12 sectors</span></div>
+      <div class="stat rv" style="--d:200ms"><b data-count="118641" data-sep="1">118,641</b><span>stock-days of daily prices, Feb 2018 to Oct 2026</span></div>
+      <div class="stat rv" style="--d:320ms"><b>21 days</b><span>ahead: the return the model is asked to forecast</span></div>
+    </div>
+    <div class="panel feat-panel" data-f="3" data-fx="group">
+      <h3 class="rv">Feature selection <span class="formula">score = relevance − 0.5 × redundancy</span></h3>
+      <div class="chips" data-chart="chips"></div>
+      <div class="callout tight cull-note" data-f="4">
+        <p><b>10 of 19 kept.</b> RSI, stochastic %K and Williams %R track the same thing, so one stays.</p>
+        <p><b>Fundamentals left out of the model.</b> Only today's ratios exist, so using them on past dates would leak the future.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 5 -->
+<section class="slide" data-focus data-section="Technical deep dive" data-title="Tuning beat the notebook by 9.2%, and only tied the naive baseline."
+  data-notes="Validation: purged walk-forward cross-validation, 5 expanding folds. Each fold trains on the past and validates on the next block, with 31 trading days removed in between because each label looks 21 days ahead. Hold-out 2025-01-23 to 2026-09-09 (24,413 stock-days) never used for selection or tuning. Search: random search over 25 settings x 5 folds x 3 quantiles = 375 model fits, scored by mean pinball loss. CV pinball loss: naive baseline 0.02395; LightGBM notebook settings 0.02648; LightGBM tuned 0.02406 +/- 0.00529; Ridge is a point forecast with no quantiles (CV MAE 0.0731 vs naive 0.0722). Tuning improved on the notebook settings by 9.2%. Against the naive no-feature baseline the tuned model is 0.5% worse, inside fold-to-fold variation. Chosen settings: n_estimators=100, learning_rate=0.02, num_leaves=4, min_child_samples=50, subsample=0.8, colsample_bytree=0.5, reg_lambda=0. With a weak signal, complex trees fit noise.">
+  <header class="head">
+    <p class="tag">Technical deep dive</p>
+    <h2>Tuning beat the notebook by 9.2%, and only tied the naive baseline.</h2>
+  </header>
+  <div class="body g-cv">
+    <div class="panel cv-panel" data-f="1" data-fx="group" data-until="3">
+      <h3 class="rv">Purged walk-forward cross-validation: five expanding folds</h3>
+      <div data-chart="folds"></div>
+    </div>
+    <div class="panel cand-panel" data-f="4" data-fx="group">
+      <h3 class="rv">Cross-validated pinball loss <span class="formula">lower is better</span></h3>
+      <div data-chart="candidates"></div>
+    </div>
+    <div class="cv-side">
+      <div class="panel" data-f="5" data-fx="group">
+        <div class="stat row rv"><b data-count="375">375</b><span>model fits: 25 settings × 5 folds × 3 quantiles</span></div>
+        <div class="stat row rv" style="--d:120ms"><b>−<span data-count="9.2" data-dec="1">9.2</span>%</b><span>pinball loss against the notebook settings</span></div>
+        <div class="stat row rv" style="--d:240ms"><b>+<span data-count="0.5" data-dec="1">0.5</span>%</b><span>against naive: a tie, inside fold-to-fold variation</span></div>
+      </div>
+      <div class="callout tight" data-f="6">
+        <p><b>The search chose 4 leaves and 100 trees.</b> With a weak signal, bigger trees fit noise.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 6 -->
+<section class="slide" data-focus data-section="Technical deep dive" data-title="Honest ranges. No market-beating picks."
+  data-notes="Hold-out period 2025-01-23 to 2026-09-09, 24,413 stock-days never used for selection or tuning. P10-P90 coverage 82.4% against an 80% target. Pinball loss: LightGBM 0.01880 vs naive 0.01915. Rank information coefficient +0.046, positive on 56% of 407 days. Direction right 51.0% of the time. Backtest on the hold-out (every 21 trading days hold the 5 highest median forecasts, equal weight, 20 bps cost; benchmark = all stocks equal weight): strategy -4.4% a year vs benchmark +3.3% a year, median over 21 start days; excess -6.4% (range -16.8% to +7.1%); beat the benchmark from 24% of start days. In cross-validation folds the excess was +1.6% a year (range -4.3% to +16.6%). SHAP (TreeExplainer on the median model), largest drivers: mkt_vol_21, mom_126_21, fracdiff_close, vol_63, ret_63. Error analysis: calm markets rank IC -0.079, normal +0.076, turbulent +0.142; direction right 31.1% when the market fell and 64.6% when it rose. Limits: 21-day returns are mostly noise; universe is 60 of today's large caps (survivorship bias) and one country; the backtest ignores taxes, market impact and slippage beyond a flat cost. Next: point-in-time fundamentals, a market-relative target, a larger universe including delisted names, a controlled paper-trading period.">
+  <header class="head">
+    <p class="tag">Technical deep dive</p>
+    <h2>Honest ranges. No market-beating picks.</h2>
+  </header>
+  <div class="body g-res">
+    <div class="panel cov-panel" data-f="1" data-fx="group">
+      <h3 class="rv">Unseen data: outcomes inside the P10 to P90 range</h3>
+      <div data-chart="coverage"></div>
+      <div class="trio rv" style="--d:900ms">
+        <div><b>0.01880</b><span>pinball loss, naive 0.01915</span></div>
+        <div><b>+0.046</b><span>rank IC, positive on 56% of 407 days</span></div>
+        <div><b>51.0%</b><span>direction right</span></div>
+      </div>
+    </div>
+    <div class="panel bt-panel" data-f="2" data-fx="group">
+      <h3 class="rv">Backtest on the same unseen period</h3>
+      <div class="bt-wrap">
+        <div data-chart="backtest"></div>
+        <div class="bt-nums">
+          <div class="rv" style="--d:900ms"><b>−<span data-count="4.4" data-dec="1">4.4</span>% a year</b><span><i class="key solid"></i>Top-5 picks</span></div>
+          <div class="rv" style="--d:1050ms"><b>+<span data-count="3.3" data-dec="1">3.3</span>% a year</b><span><i class="key dash"></i>All 60 stocks, equal weight</span></div>
+          <p class="small rv" style="--d:1200ms">Median of 21 start days, after costs. Picks won from 24% of them.</p>
+        </div>
+      </div>
+    </div>
+    <div class="panel shap-panel" data-f="3" data-fx="group">
+      <h3 class="rv">What drives a forecast (SHAP)</h3>
+      <div data-chart="shap"></div>
+    </div>
+    <div class="panel err-panel" data-f="4" data-fx="group">
+      <h3 class="rv">Where it is wrong</h3>
+      <div data-chart="regimes"></div>
+      <p class="err-line rv" style="--d:700ms">Direction right <b>31.1%</b> when the market fell, <b>64.6%</b> when it rose.</p>
+    </div>
+    <div class="callout limits" data-f="5">
+      <h3>Limits</h3>
+      <ul class="plain">
+        <li>21-day returns are mostly noise</li>
+        <li>60 of today's large caps: survivorship bias</li>
+        <li>No taxes or slippage beyond a flat cost</li>
+      </ul>
+      <p class="next"><b>Next:</b> point-in-time fundamentals, a larger universe, paper trading.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 7 -->
+<section class="slide s-demo" data-section="Demo" data-title="Live demo"
+  data-notes="Live demo steps: profile intake, ranked book, stock research with SHAP, portfolio lab, model report. Live app https://fn.iimbg.com . Landing page https://fin.iimbg.com . Code https://github.com/build-with-bala/ai-portfolio-advisor . Engineering: built with Claude Code and verified by the team; 22 automated tests; one command (python -m src.model) retrains from the committed data snapshot in about a minute; prompts, failures and fixes are in docs/VIBE_CODING_LOG.md. Team: Group 5: B Gokul Vaigundh (DBM/1015/03), Balaji G (DBM/1016/03), Shashaanth NC (DBM/1070/03).">
+  <header class="head">
+    <p class="tag">Demo</p>
+    <h2>Live demo</h2>
+  </header>
+  <div class="body g-demo">
+    <div class="rail r5" data-f="1" data-fx="group">
+      <div class="rail-line gx" style="--d:100ms"></div>
+      <div class="rail-pulses" aria-hidden="true"><i></i><i></i><i></i></div>
+      <ol class="stations">
+        <li class="rv" style="--d:0ms"><b>Profile intake</b><i></i><span>risk and capital</span></li>
+        <li class="rv" style="--d:140ms"><b>Ranked book</b><i></i><span>signal and range</span></li>
+        <li class="rv" style="--d:280ms"><b>Stock research</b><i></i><span>SHAP for one stock</span></li>
+        <li class="rv" style="--d:420ms"><b>Portfolio lab</b><i></i><span>position sizes</span></li>
+        <li class="rv" style="--d:560ms"><b>Model report</b><i></i><span>the numbers shown here</span></li>
+      </ol>
+    </div>
+    <div class="links" data-f="2" data-fx="group">
+      <a class="rv" href="https://fn.iimbg.com" target="_blank" rel="noopener"><span>Live app</span><b>fn.iimbg.com</b></a>
+      <a class="rv" style="--d:120ms" href="https://fin.iimbg.com" target="_blank" rel="noopener"><span>Landing page</span><b>fin.iimbg.com</b></a>
+      <a class="rv" style="--d:240ms" href="https://github.com/build-with-bala/ai-portfolio-advisor" target="_blank" rel="noopener"><span>Code</span><b>github.com/build-with-bala/ai-portfolio-advisor</b></a>
+    </div>
+    <div class="built" data-f="3" data-fx="group">
+      <div class="stat rv"><b data-count="22">22</b><span>automated tests</span></div>
+      <div class="stat rv" style="--d:120ms"><b>1 command</b><span>retrains the model in about a minute</span></div>
+      <div class="stat rv wide" style="--d:240ms"><b>Built with Claude Code</b><span>prompts, failures and fixes are in docs/VIBE_CODING_LOG.md. The team owns and defends the method.</span></div>
+    </div>
+    <p class="team" data-f="3"><b>Group 5</b><br>B Gokul Vaigundh · DBM/1015/03<br>Balaji G · DBM/1016/03<br>Shashaanth NC · DBM/1070/03</p>
+  </div>
+</section>
+
+</div>
+<div id="sweep" aria-hidden="true"><span></span></div>
+<div id="progress" aria-hidden="true"></div>
+<div id="hint">← → to move &nbsp; O overview &nbsp; F fullscreen</div>
+</div>
+<noscript><p style="font:20px/1.4 Georgia,serif;padding:16px">This deck is shown as a scrolling page because JavaScript is off. Charts need JavaScript.</p></noscript>
+<script src="deck.js"></script>
+</body>
+</html>

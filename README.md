@@ -1,6 +1,6 @@
 # AI Portfolio Advisor
 
-**Live app:** https://fn.iimbg.com · **Report:** [docs/REPORT.md](docs/REPORT.md) ([Word](docs/Capstone_Report.docx)) · **Deck:** [docs/Capstone_Deck.pptx](docs/Capstone_Deck.pptx) · **Vibe Coding Log:** [docs/VIBE_CODING_LOG.md](docs/VIBE_CODING_LOG.md) · **Landing page:** [landing/index.html](landing/index.html)
+**Live app:** https://fn.iimbg.com · **Report:** [docs/REPORT.md](docs/REPORT.md) ([Word](docs/Capstone_Report.docx)) · **Deck:** [animated](https://fin.iimbg.com/deck/) · [PDF](docs/Capstone_Deck.pdf) · [PPTX](docs/Capstone_Deck.pptx) · **Vibe Coding Log:** [docs/VIBE_CODING_LOG.md](docs/VIBE_CODING_LOG.md) · **Landing page:** https://fin.iimbg.com · **Claude Code session log:** [docs/CLAUDE_CODE_LOG.md](docs/CLAUDE_CODE_LOG.md)
 
 ## Reproduce in three commands
 

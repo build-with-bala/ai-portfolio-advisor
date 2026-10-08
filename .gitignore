@@ -16,3 +16,4 @@ output/playwright/
 .playwright-cli/
 !data/snapshot/
 landing/screenshots/
+landing/deck/export/
