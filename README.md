@@ -1,6 +1,6 @@
 # AI Portfolio Advisor
 
-**Live app:** https://fn.iimbg.com · **Report:** [docs/REPORT.md](docs/REPORT.md) ([Word](docs/Capstone_Report.docx)) · **Deck:** [animated](https://fin.iimbg.com/deck/) · [PDF](docs/Capstone_Deck.pdf) · [PPTX](docs/Capstone_Deck.pptx) · **Vibe Coding Log:** [docs/VIBE_CODING_LOG.md](docs/VIBE_CODING_LOG.md) · **Landing page:** https://fin.iimbg.com · **Claude Code session log:** [docs/CLAUDE_CODE_LOG.md](docs/CLAUDE_CODE_LOG.md)
+**Live app:** https://fn.iimbg.com · **Report:** [docs/REPORT.md](docs/REPORT.md) ([Word](docs/Capstone_Report.docx), [PDF](docs/Capstone_Report.pdf)) · **Deck:** [animated](https://fin.iimbg.com/deck/) · [PDF](docs/Capstone_Deck.pdf) · [PPTX](docs/Capstone_Deck.pptx) · **Vibe Coding Log:** [docs/VIBE_CODING_LOG.md](docs/VIBE_CODING_LOG.md) · **Landing page:** https://fin.iimbg.com · **Claude Code session log:** [docs/CLAUDE_CODE_LOG.md](docs/CLAUDE_CODE_LOG.md)
 
 ## Reproduce in three commands
 
@@ -18,7 +18,7 @@ streamlit run app.py
 | `src/portfolio_advisor/` | Decision engine and live-quote adapters shared by the app and API |
 | `reports/metrics.json` | Every number quoted in the report and deck |
 | `data/snapshot/` | Committed price snapshot, so training is reproducible offline |
-| `tests/` | 17 tests, including leakage checks on the splits |
+| `tests/` | 22 tests, including leakage checks on the splits |
 
 
 A Python-only research product that turns the outputs of the accompanying

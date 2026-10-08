@@ -11,7 +11,7 @@ This page records the session that brought the repository up to the capstone spe
 | Claude Code (terminal agent) | Reading the spec and the codebase, writing `src/data.py`, `src/model.py`, the Model report tab, tests, the report and deck generator |
 | Claude Code sub-agent (background) | Designing and building `landing/index.html` in parallel, with its own brief |
 | Playwright (browser automation) | Screenshots to check the landing page and app at desktop and phone widths |
-| `uv`, `pytest`, GitHub CLI | Environment, 17 automated tests, repository operations |
+| `uv`, `pytest`, GitHub CLI | Environment, 22 automated tests, repository operations |
 
 ## Workflow
 
